@@ -12,6 +12,13 @@
   <!-- FIXME change it to the project's website -->
   <url>http://www.example.com</url>
 
+  <repositories>
+    <repository>
+      <id>my-alternate-repository</id>
+      <url>https://repository.cloudera.com/artifactory/cloudera-repos/</url>
+    </repository>
+  </repositories>
+
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.source>1.7</maven.compiler.source>
@@ -39,6 +46,32 @@
       <artifactId>mysql-connector-java</artifactId>
       <version>5.1.44</version>
     </dependency>
+
+    <!-- https://mvnrepository.com/artifact/org.apache.spark/spark-core -->
+    <dependency>
+      <groupId>org.apache.spark</groupId>
+      <artifactId>spark-core_2.10</artifactId>
+      <version>1.6.0-cdh5.7.0</version>
+    </dependency>
+
+    <!-- https://mvnrepository.com/artifact/org.apache.spark/spark-sql -->
+    <dependency>
+      <groupId>org.apache.spark</groupId>
+      <artifactId>spark-sql_2.10</artifactId>
+      <version>1.6.0-cdh5.7.0</version>
+    </dependency>
+
+
+      <!-- https://mvnrepository.com/artifact/org.apache.spark/spark-hive -->
+      <dependency>
+          <groupId>org.apache.spark</groupId>
+          <artifactId>spark-hive_2.10</artifactId>
+          <version>1.6.0-cdh5.7.0</version>
+      </dependency>
+
+
+
+
 
 
   </dependencies>

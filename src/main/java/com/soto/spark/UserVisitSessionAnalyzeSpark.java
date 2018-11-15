@@ -7,6 +7,7 @@ import com.soto.dao.ITaskDAO;
 import com.soto.dao.impl.DAOFactory;
 import com.soto.domain.Task;
 import com.soto.test.MockData;
+import com.soto.util.DateUtils;
 import com.soto.util.ParamUtils;
 import com.soto.util.StringUtils;
 import com.soto.util.ValidUtils;
@@ -23,6 +24,7 @@ import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.hive.HiveContext;
 import scala.Tuple2;
 
+import java.util.Date;
 import java.util.Iterator;
 
 /**
@@ -187,6 +189,11 @@ public class UserVisitSessionAnalyzeSpark {
                         StringBuffer clickCategoryIdsBuffer = new StringBuffer("");
 
                         Long userid = null;
+                        // session的起始和结束时间
+                        Date startTime = null;
+                        Date endTime = null;
+                        // session的访问步长
+                        int stepLength = 0;
 
                         //遍历session所有的访问行为
                         while (iterator.hasNext()) {
@@ -219,12 +226,33 @@ public class UserVisitSessionAnalyzeSpark {
                                     clickCategoryIdsBuffer.append(clickCategoryId + ",");
                                 }
                             }
+
+                            // 计算session开始和结束时间
+                            Date actionTime = DateUtils.parseTime(row.getString(4));
+
+                            if(startTime == null) {
+                                startTime = actionTime;
+                            }
+                            if(endTime == null) {
+                                endTime = actionTime;
+                            }
+
+                            if(actionTime.before(startTime)) {
+                                startTime = actionTime;
+                            }
+                            if(actionTime.after(endTime)) {
+                                endTime = actionTime;
+                            }
+
+                            // 计算session访问步长
+                            stepLength++;
                         }
 
                         String searchKeywords = StringUtils.trimComma(searchKeywordBuffer.toString());
                         String clickCategoryIds = StringUtils.trimComma(clickCategoryIdsBuffer.toString());
 
-
+                        // 计算session访问时长（秒）
+                        long visitLength = (endTime.getTime() - startTime.getTime()) / 1000;
 
                         // 返回的数据格式，即<sessionid,partAggrInfo>
                         // 如果是跟用户信息进行聚合的话，那么key，就不应该是sessionid
@@ -242,7 +270,10 @@ public class UserVisitSessionAnalyzeSpark {
 
                         String partAggrInfo = Constants.FIELD_SESSION_ID + "=" + sessionid + "|"
                                 + Constants.FIELD_SEARCH_KEYWORDS + "=" + searchKeywords + "|"
-                                + Constants.FIELD_CLICK_CATEGORY_IDS + "=" + clickCategoryIds;
+                                + Constants.FIELD_CLICK_CATEGORY_IDS + "=" + clickCategoryIds + "|"
+                                + Constants.FIELD_VISIT_LENGTH + "=" + visitLength + "|"
+                                + Constants.FIELD_STEP_LENGTH + "=" + stepLength + "|"
+                                + Constants.FIELD_START_TIME + "=" + DateUtils.formatTime(startTime);
                         return new Tuple2<Long, String>(userid, partAggrInfo);
                     }
                 });

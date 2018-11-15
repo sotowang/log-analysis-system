@@ -1,5 +1,6 @@
 package com.soto.dao.impl;
 
+import com.soto.dao.ISessionAggrStatDAO;
 import com.soto.dao.ITaskDAO;
 
 /**
@@ -12,5 +13,9 @@ public class DAOFactory {
      */
     public static ITaskDAO getTaskDAO(){
         return new TaskDAOImpl();
+    }
+
+    public static ISessionAggrStatDAO getSessionAggrStatDAO() {
+        return new SessionAggrStatDAOImpl();
     }
 }

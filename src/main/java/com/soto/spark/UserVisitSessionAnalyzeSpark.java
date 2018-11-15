@@ -47,6 +47,7 @@ public class UserVisitSessionAnalyzeSpark {
         args = new String[] {"1"};
         SparkConf conf = new SparkConf()
                 .setAppName(Constants.SPARK_APP_NAME_SESSION)
+                .set("spark.storage.memoryFraction", "0.5")
                 .setMaster("local");
 
         JavaSparkContext sc = new JavaSparkContext(conf);
@@ -87,6 +88,25 @@ public class UserVisitSessionAnalyzeSpark {
                 sessionid2AggrInfoRDD, taskParam, sessionAggrStatAccumulator);
 
 
+
+        /**
+         * 对于Accumulator这种分布式累加计算的变量的使用，有一个重要说明
+         *
+         * 从Accumulator中，获取数据，插入数据库的时候，一定要，一定要，是在有某一个action操作以后
+         * 再进行。。。
+         *
+         * 如果没有action的话，那么整个程序根本不会运行。。。
+         *
+         * 是不是在calculateAndPersisitAggrStat方法之后，运行一个action操作，比如count、take
+         * 不对！！！
+         *
+         * 必须把能够触发job执行的操作，放在最终写入MySQL方法之前
+         *
+         * 计算出来的结果，在J2EE中，是怎么显示的，是用两张柱状图显示
+         */
+
+
+        System.out.println("filteredSessionid2AggrInfoRDD================"+filteredSessionid2AggrInfoRDD.count());
 
         // 计算出各个范围的session占比，并写入MySQL
         calculateAndPersistAggrStat(sessionAggrStatAccumulator.value(),
@@ -187,48 +207,55 @@ public class UserVisitSessionAnalyzeSpark {
         // 到此为止，获取的数据格式，如下：<userid,partAggrInfo(sessionid,searchKeywords,clickCategoryIds)>
         JavaPairRDD<Long, String> userid2PartAggrInfoRDD = sessionid2ActionsRDD.mapToPair(
 
-                new PairFunction<Tuple2<String, Iterable<Row>>, Long, String>() {
+                new PairFunction<Tuple2<String,Iterable<Row>>, Long, String>() {
+
                     private static final long serialVersionUID = 1L;
 
                     @Override
-                    public Tuple2<Long, String> call(Tuple2<String, Iterable<Row>> tuple) throws Exception {
+                    public Tuple2<Long, String> call(Tuple2<String, Iterable<Row>> tuple)
+                            throws Exception {
                         String sessionid = tuple._1;
                         Iterator<Row> iterator = tuple._2.iterator();
 
-
-                        StringBuffer searchKeywordBuffer = new StringBuffer("");
+                        StringBuffer searchKeywordsBuffer = new StringBuffer("");
                         StringBuffer clickCategoryIdsBuffer = new StringBuffer("");
 
                         Long userid = null;
+
                         // session的起始和结束时间
                         Date startTime = null;
                         Date endTime = null;
                         // session的访问步长
                         int stepLength = 0;
 
-                        //遍历session所有的访问行为
-                        while (iterator.hasNext()) {
-                            //提取每个访问行为的搜索字段和点击品类字段
+                        // 遍历session所有的访问行为
+                        while(iterator.hasNext()) {
+                            // 提取每个访问行为的搜索词字段和点击品类字段
                             Row row = iterator.next();
-                            if (userid == null) {
+                            if(userid == null) {
                                 userid = row.getLong(1);
-                                System.out.println("userid++++++++++"+userid);
-
                             }
                             String searchKeyword = row.getString(5);
-                            System.out.println("searchKeyword++++++++++"+searchKeyword);
-                            Long clickCategoryId = row.getLong(6);
-                            System.out.println("clickCategoryId++++++++++"+clickCategoryId);
 
-                            //实际上并不是每一行访问行为都有searchKeyword和clickCategory字段
-                            //任何一行行为数据都不可能两个字段都有，可能出现null
-                            //将搜索词或点击品类id拼接到字符串中去
-                            //首先要满足：不能是null值
-                            //其次，之前的字符串中还没有搜索词或都点击品类
+                            //这个BUG调了很久
+//                            Long clickCategoryId = row.getLong(7);
 
-                            if (StringUtils.isNotEmpty(searchKeyword)) {
-                                if (!searchKeywordBuffer.toString().contains(searchKeyword)) {
-                                    searchKeywordBuffer.append(searchKeyword + ",");
+//                            Long clickCategoryId = row.getAs("click_category_id");
+                            Long clickCategoryId = row.getAs(7);
+
+                            // 实际上这里要对数据说明一下
+                            // 并不是每一行访问行为都有searchKeyword何clickCategoryId两个字段的
+                            // 其实，只有搜索行为，是有searchKeyword字段的
+                            // 只有点击品类的行为，是有clickCategoryId字段的
+                            // 所以，任何一行行为数据，都不可能两个字段都有，所以数据是可能出现null值的
+
+                            // 我们决定是否将搜索词或点击品类id拼接到字符串中去
+                            // 首先要满足：不能是null值
+                            // 其次，之前的字符串中还没有搜索词或者点击品类id
+
+                            if(StringUtils.isNotEmpty(searchKeyword)) {
+                                if(!searchKeywordsBuffer.toString().contains(searchKeyword)) {
+                                    searchKeywordsBuffer.append(searchKeyword + ",");
                                 }
                             }
                             if(clickCategoryId != null) {
@@ -259,34 +286,37 @@ public class UserVisitSessionAnalyzeSpark {
                             stepLength++;
                         }
 
-                        String searchKeywords = StringUtils.trimComma(searchKeywordBuffer.toString());
+                        String searchKeywords = StringUtils.trimComma(searchKeywordsBuffer.toString());
                         String clickCategoryIds = StringUtils.trimComma(clickCategoryIdsBuffer.toString());
 
                         // 计算session访问时长（秒）
                         long visitLength = (endTime.getTime() - startTime.getTime()) / 1000;
 
-                        // 返回的数据格式，即<sessionid,partAggrInfo>
-                        // 如果是跟用户信息进行聚合的话，那么key，就不应该是sessionid
+                        // 大家思考一下
+                        // 我们返回的数据格式，即使<sessionid,partAggrInfo>
+                        // 但是，这一步聚合完了以后，其实，我们是还需要将每一行数据，跟对应的用户信息进行聚合
+                        // 问题就来了，如果是跟用户信息进行聚合的话，那么key，就不应该是sessionid
                         // 就应该是userid，才能够跟<userid,Row>格式的用户信息进行聚合
-                        // 这里直接返回<sessionid,partAggrInfo>，还得再做一次mapToPair算子
+                        // 如果我们这里直接返回<sessionid,partAggrInfo>，还得再做一次mapToPair算子
                         // 将RDD映射成<userid,partAggrInfo>的格式，那么就多此一举
 
-                        // 所以这里其实可以直接，返回的数据格式，就是<userid,partAggrInfo>
+                        // 所以，我们这里其实可以直接，返回的数据格式，就是<userid,partAggrInfo>
                         // 然后跟用户信息join的时候，将partAggrInfo关联上userInfo
                         // 然后再直接将返回的Tuple的key设置成sessionid
                         // 最后的数据格式，还是<sessionid,fullAggrInfo>
 
                         // 聚合数据，用什么样的格式进行拼接？
-                        // 这里统一定义，使用key=value|key=value
-
+                        // 我们这里统一定义，使用key=value|key=value
                         String partAggrInfo = Constants.FIELD_SESSION_ID + "=" + sessionid + "|"
                                 + Constants.FIELD_SEARCH_KEYWORDS + "=" + searchKeywords + "|"
                                 + Constants.FIELD_CLICK_CATEGORY_IDS + "=" + clickCategoryIds + "|"
                                 + Constants.FIELD_VISIT_LENGTH + "=" + visitLength + "|"
                                 + Constants.FIELD_STEP_LENGTH + "=" + stepLength + "|"
                                 + Constants.FIELD_START_TIME + "=" + DateUtils.formatTime(startTime);
+
                         return new Tuple2<Long, String>(userid, partAggrInfo);
                     }
+
                 });
 
 

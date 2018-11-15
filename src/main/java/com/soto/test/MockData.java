@@ -1,5 +1,11 @@
 package com.soto.test;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Random;
+import java.util.UUID;
+
 import com.soto.util.DateUtils;
 import com.soto.util.StringUtils;
 import org.apache.spark.api.java.JavaRDD;
@@ -11,9 +17,14 @@ import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
 
-import java.util.*;
 
+/**
+ * 模拟数据程序
+ * @author Administrator
+ *
+ */
 public class MockData {
+
     /**
      * 模拟数据
      * @param sc
@@ -167,4 +178,6 @@ public class MockData {
 
         df3.registerTempTable("product_info");
     }
+
+
 }

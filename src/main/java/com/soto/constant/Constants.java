@@ -23,13 +23,14 @@ public interface Constants {
     String FIELD_SESSION_ID = "sessionid";
     String FIELD_SEARCH_KEYWORDS = "searchKeywords";
     String FIELD_CLICK_CATEGORY_IDS = "clickCategoryIds";
-    String FIELD_STEP_LENGTH = "";
-    String FIELD_START_TIME = "";
-    String FIELD_VISIT_LENGTH = "";
+    String FIELD_START_TIME = "startTime";
     String FIELD_AGE = "age";
     String FIELD_PROFESSIONAL = "professional";
     String FIELD_CITY = "city";
     String FIELD_SEX = "sex";
+    String FIELD_VISIT_LENGTH = "visitLength";
+    String FIELD_STEP_LENGTH = "stepLength";
+
 
 
     String SESSION_COUNT = "session_count";
@@ -43,6 +44,7 @@ public interface Constants {
     String TIME_PERIOD_3m_10m = "3m_10m";
     String TIME_PERIOD_10m_30m = "10m_30m";
     String TIME_PERIOD_30m = "30m";
+
 
     String STEP_PERIOD_1_3 = "1_3";
     String STEP_PERIOD_4_6 = "4_6";

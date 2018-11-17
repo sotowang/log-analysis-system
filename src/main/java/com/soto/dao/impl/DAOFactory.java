@@ -1,6 +1,8 @@
 package com.soto.dao.impl;
 
 import com.soto.dao.ISessionAggrStatDAO;
+import com.soto.dao.ISessionDetailDAO;
+import com.soto.dao.ISessionRandomExtractDAO;
 import com.soto.dao.ITaskDAO;
 
 /**
@@ -17,5 +19,13 @@ public class DAOFactory {
 
     public static ISessionAggrStatDAO getSessionAggrStatDAO() {
         return new SessionAggrStatDAOImpl();
+    }
+
+    public static ISessionRandomExtractDAO getSessionRandomExtractDAO() {
+        return new SessionRandomExtractDAOImpl();
+    }
+
+    public static ISessionDetailDAO getSessionDetailDAO() {
+        return new SessionDetailDAOImpl();
     }
 }

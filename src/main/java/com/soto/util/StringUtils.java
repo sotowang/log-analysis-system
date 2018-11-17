@@ -20,7 +20,7 @@ public class StringUtils {
      * @return
      */
     public static boolean isNotEmpty(String string) {
-        return string != null || !"".equals(string);
+        return string != null && !"".equals(string);
     }
 
     /**

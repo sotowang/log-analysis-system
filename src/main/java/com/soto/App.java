@@ -8,6 +8,13 @@ public class App
 {
     public static void main( String[] args )
     {
-        System.out.println( "Hello World!" );
+        Long s = null;
+        if (-1 != s) {
+            System.out.println("bbb");
+        }
+
+        if (String.valueOf(s) != String.valueOf(-1)) {
+            System.out.println("aaa");
+        }
     }
 }

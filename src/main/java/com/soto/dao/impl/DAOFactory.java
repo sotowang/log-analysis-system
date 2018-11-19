@@ -1,9 +1,6 @@
 package com.soto.dao.impl;
 
-import com.soto.dao.ISessionAggrStatDAO;
-import com.soto.dao.ISessionDetailDAO;
-import com.soto.dao.ISessionRandomExtractDAO;
-import com.soto.dao.ITaskDAO;
+import com.soto.dao.*;
 
 /**
  * DAO工厂类
@@ -27,5 +24,9 @@ public class DAOFactory {
 
     public static ISessionDetailDAO getSessionDetailDAO() {
         return new SessionDetailDAOImpl();
+    }
+
+    public static ITop10CategoryDAO getTop10CategoryDAO() {
+        return new Top10CategoryDAOImpl();
     }
 }

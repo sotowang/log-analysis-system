@@ -63,6 +63,16 @@ session粒度聚合，按筛选条件进行过滤
 
 ##### 4. 性能调优
 * 性能调优
+executor, cpu per executor, memory per executor, driver memory
+```$xslt
+spark-submit \
+--class com.soto.....  \
+--num-executors 3 \  
+--driver-memory 100m \
+--executor-memory 1024m \
+--executor-cores 3 \
+/usr/local/......jar  \
+```
 * 数据倾斜解决
 * troubleshotting
 

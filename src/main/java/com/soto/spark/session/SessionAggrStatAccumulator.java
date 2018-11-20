@@ -1,4 +1,4 @@
-package com.soto.spark;
+package com.soto.spark.session;
 
 import com.soto.constant.Constants;
 import com.soto.util.StringUtils;

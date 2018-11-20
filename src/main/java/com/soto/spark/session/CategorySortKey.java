@@ -1,4 +1,4 @@
-package com.soto.spark;
+package com.soto.spark.session;
 
 import scala.math.Ordered;
 

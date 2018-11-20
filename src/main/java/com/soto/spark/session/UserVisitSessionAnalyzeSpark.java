@@ -47,7 +47,11 @@ public class UserVisitSessionAnalyzeSpark {
         SparkConf conf = new SparkConf()
                 .setAppName(Constants.SPARK_APP_NAME_SESSION)
                 .set("spark.storage.memoryFraction", "0.5")
-                .setMaster("local");
+                .setMaster("local")
+                .set("spark.serializer","org.apache.spark.serializer.KryoSerializer")
+                .registerKryoClasses(new Class[]{
+                        CategorySortKey.class
+                });
 
         JavaSparkContext sc = new JavaSparkContext(conf);
 

@@ -73,6 +73,14 @@ spark-submit \
 --executor-cores 3 \
 /usr/local/......jar  \
 ```
+
+* Kryo 序列化
+```$xslt
+1. 算子函数中用到了外部变量，会序列化，会使用Kyro
+2. 使用了序列化的持久化级别时，在将每个RDD partition序列化成一个在的字节数组时，就会使用Kryo进一步优化序列化的效率和性能
+3. stage中task之间 执行shuffle时，文件通过网络传输，会使用序列化
+
+```
 * 数据倾斜解决
 * troubleshotting
 

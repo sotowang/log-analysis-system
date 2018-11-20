@@ -16,6 +16,7 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.*;
+import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
@@ -131,7 +132,7 @@ public class UserVisitSessionAnalyzeSpark {
         sessionid2detailRDD = sessionid2detailRDD.persist(StorageLevel.MEMORY_ONLY());
 
 
-        randomExtractSession(task.getTaskid(), filteredSessionid2AggrInfoRDD, sessionid2actionRDD);
+        randomExtractSession(sc, task.getTaskid(), filteredSessionid2AggrInfoRDD, sessionid2actionRDD);
 
         /**
          * 对于Accumulator这种分布式累加计算的变量的使用，有一个重要说明
@@ -661,9 +662,11 @@ public class UserVisitSessionAnalyzeSpark {
     }
 
 
-    private static void randomExtractSession(final long taskid,
-                                             JavaPairRDD<String, String> sessionid2AggrInfoRDD,
-                                             JavaPairRDD<String, Row> sessionid2actionRDD) {
+    private static void randomExtractSession(
+            JavaSparkContext sc,
+            final long taskid,
+            JavaPairRDD<String, String> sessionid2AggrInfoRDD,
+            JavaPairRDD<String, Row> sessionid2actionRDD) {
 
         /**
          * 第一步，计算出每天每小时的session数量
@@ -735,8 +738,7 @@ public class UserVisitSessionAnalyzeSpark {
          * 将map做成广播变量
          *
          */
-        final Map<String, Map<String, List<Integer>>> dateHourExtractMap = new HashMap<String, Map<String, List<Integer>>>();
-
+        Map<String, Map<String, List<Integer>>> dateHourExtractMap = new HashMap<String, Map<String, List<Integer>>>();
         Random random = new Random();
 
         for (Map.Entry<String, Map<String, Long>> dateHourCountEntry : dateHourCountMap.entrySet()) {
@@ -788,6 +790,9 @@ public class UserVisitSessionAnalyzeSpark {
             }
         }
 
+        final Broadcast<Map<String, Map<String, List<Integer>>>> dateHourExtractMapBroadcast = sc.broadcast(dateHourExtractMap);
+
+
         /**
          * 第三步：遍历每天每小时的session，然后根据随机索引进行抽取
          */
@@ -824,8 +829,8 @@ public class UserVisitSessionAnalyzeSpark {
                          * 直接调用广播变量（Broadcast类型）的value() / getValue()
                          * 可以获取到之前封装的广播变量
                          */
-//                        Map<String, Map<String, IntList>> dateHourExtractMap =
-//                                dateHourExtractMapBroadcast.value();
+                        Map<String, Map<String, List<Integer>>> dateHourExtractMap =
+                                dateHourExtractMapBroadcast.value();
                         List<Integer> extractIndexList = dateHourExtractMap.get(date).get(hour);
 
                         ISessionRandomExtractDAO sessionRandomExtractDAO =
@@ -839,9 +844,6 @@ public class UserVisitSessionAnalyzeSpark {
                             if (extractIndexList.contains(index)) {
                                 String sessionid = StringUtils.getFieldFromConcatString(
                                         sessionAggrInfo, "\\|", Constants.FIELD_SESSION_ID);
-
-//                                System.out.println("sessionAggrInfo========================"+sessionAggrInfo);
-
 
                                 // 将数据写入MySQL
                                 SessionRandomExtract sessionRandomExtract = new SessionRandomExtract();

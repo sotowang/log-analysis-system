@@ -53,6 +53,8 @@ public class UserVisitSessionAnalyzeSpark {
                 .set("spark.shuffle.file.buffer", "64")
                 .set("spark.shuffle.memoryFraction", "0.3")
                 .set("spark.reducer.maxSizeInFlight", "24")
+                .set("spark.shuffle.io.maxRetries", "60")
+                .set("spark.shuffle.io.retryWait", "60")
                 .setMaster("local")
                 .set("spark.serializer","org.apache.spark.serializer.KryoSerializer")
                 .registerKryoClasses(new Class[]{

@@ -45,7 +45,6 @@ public class UserVisitSessionAnalyzeSpark {
 
     public static void main(String[] args) {
 
-        args = new String[]{"1"};
         SparkConf conf = new SparkConf()
                 .setAppName(Constants.SPARK_APP_NAME_SESSION)
                 .set("spark.storage.memoryFraction", "0.5")
@@ -55,26 +54,32 @@ public class UserVisitSessionAnalyzeSpark {
                 .set("spark.reducer.maxSizeInFlight", "24")
                 .set("spark.shuffle.io.maxRetries", "60")
                 .set("spark.shuffle.io.retryWait", "60")
-                .setMaster("local")
                 .set("spark.serializer","org.apache.spark.serializer.KryoSerializer")
                 .registerKryoClasses(new Class[]{
                         CategorySortKey.class,
                         IntList.class
                 });
 
+        SparkUtils.setMaster(conf);
+
         JavaSparkContext sc = new JavaSparkContext(conf);
 
         SQLContext sqlContext = getSQLContext(sc.sc());
 
         //生成模拟测试数据
-        mockData(sc, sqlContext);
+        SparkUtils.mockData(sc, sqlContext);
 
         // 创建需要使用的DAO组件
         ITaskDAO taskDAO = DAOFactory.getTaskDAO();
 
 
-        long taskid = ParamUtils.getTaskIdFromArgs(args);
+        long taskid = ParamUtils.getTaskIdFromArgs(args,Constants.SPARK_LOCAL_TASKID_SESSION);
         Task task = taskDAO.findById(taskid);
+        if (task == null) {
+            System.out.println(new Date() + ": cannot find this task with id [" + taskid + "]");
+            return;
+        }
+
         JSONObject taskParam = JSONObject.parseObject(task.getTaskParam());
 
         //如果要进行session粒度的数据聚合
@@ -92,8 +97,8 @@ public class UserVisitSessionAnalyzeSpark {
          * 重构完以后，actionRDD，就只在最开始，使用一次，用来生成以sessionid为key的RDD
          *
          */
-        JavaRDD<Row> actionRDD = getActionRDDByDateRange(sqlContext, taskParam);
-
+//        JavaRDD<Row> actionRDD = getActionRDDByDateRange(sqlContext, taskParam);
+        JavaRDD<Row> actionRDD = SparkUtils.getActionRDDByDateRange(sqlContext, taskParam);
 
         JavaPairRDD<String, Row> sessionid2actionRDD = getSessionid2ActionRDD(actionRDD);
 
@@ -197,40 +202,40 @@ public class UserVisitSessionAnalyzeSpark {
         }
     }
 
-    /**
-     * 获取指定日期范围内的用户访问行为数据
-     *
-     * @param sqlContext SQLContext
-     * @param taskParam  任务参数
-     * @return 行为数据RDD
-     */
-    private static JavaRDD<Row> getActionRDDByDateRange(
-            SQLContext sqlContext, JSONObject taskParam) {
-        String startDate = ParamUtils.getParam(taskParam, Constants.PARAM_START_DATE);
-        String endDate = ParamUtils.getParam(taskParam, Constants.PARAM_END_DATE);
-
-
-        String sql =
-                "select * "
-                        + "from user_visit_action "
-                        + "where date>='" + startDate + "' "
-                        + "and date<='" + endDate + "'";
-//				+ "and session_id not in('','','')"
-
-        DataFrame actionDF = sqlContext.sql(sql);
-
-        /**
-         *
-         * 比如说，Spark SQl默认就给第一个stage设置了20个task，但是根据数据量以及算法的复杂度
-         * 实际上，需要1000个task去并行执行
-         *
-         * 在这里，就可以对Spark SQL刚刚查询出来的RDD执行repartition重分区操作
-         */
-
-//		return actionDF.javaRDD().repartition(1000);
-
-        return actionDF.javaRDD();
-    }
+//    /**
+//     * 获取指定日期范围内的用户访问行为数据
+//     *
+//     * @param sqlContext SQLContext
+//     * @param taskParam  任务参数
+//     * @return 行为数据RDD
+//     */
+//    private static JavaRDD<Row> getActionRDDByDateRange(
+//            SQLContext sqlContext, JSONObject taskParam) {
+//        String startDate = ParamUtils.getParam(taskParam, Constants.PARAM_START_DATE);
+//        String endDate = ParamUtils.getParam(taskParam, Constants.PARAM_END_DATE);
+//
+//
+//        String sql =
+//                "select * "
+//                        + "from user_visit_action "
+//                        + "where date>='" + startDate + "' "
+//                        + "and date<='" + endDate + "'";
+////				+ "and session_id not in('','','')"
+//
+//        DataFrame actionDF = sqlContext.sql(sql);
+//
+//        /**
+//         *
+//         * 比如说，Spark SQl默认就给第一个stage设置了20个task，但是根据数据量以及算法的复杂度
+//         * 实际上，需要1000个task去并行执行
+//         *
+//         * 在这里，就可以对Spark SQL刚刚查询出来的RDD执行repartition重分区操作
+//         */
+//
+////		return actionDF.javaRDD().repartition(1000);
+//
+//        return actionDF.javaRDD();
+//    }
 
 
     private static JavaPairRDD<String, Row> getSessionid2ActionRDD(JavaRDD<Row> actionRDD) {

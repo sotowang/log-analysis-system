@@ -2,8 +2,10 @@ package com.soto.spark.page;
 
 import com.alibaba.fastjson.JSONObject;
 import com.soto.constant.Constants;
+import com.soto.dao.IPageSplitConvertRateDAO;
 import com.soto.dao.ITaskDAO;
 import com.soto.dao.impl.DAOFactory;
+import com.soto.domain.PageSplitConvertRate;
 import com.soto.domain.Task;
 import com.soto.util.DateUtils;
 import com.soto.util.NumberUtils;
@@ -76,10 +78,13 @@ public class PageOneStepConvertRateSpark {
         // 现在拿到的这个pageSplitPvMap，3->2，2->5，5->8，8->6
         long startPagePv = getStartPagePv(taskParam, sessionid2actionsRDD);
 
+        // 计算目标页面流的各个页面切片的转化率
+        Map<String, Double> convertRateMap = computePageSplitConvertRate(
+                taskParam, pageSplitPvMap, startPagePv);
 
 
-
-
+        // 持久化页面切片转化率
+        persistConvertRate(taskid, convertRateMap);
 
     }
 
@@ -298,5 +303,31 @@ public class PageOneStepConvertRateSpark {
         }
 
         return convertRateMap;
+    }
+
+
+    /**
+     * 持久化转化率
+     * @param convertRateMap
+     */
+    private static void persistConvertRate(long taskid,
+                                           Map<String, Double> convertRateMap) {
+        StringBuffer buffer = new StringBuffer("");
+
+        for(Map.Entry<String, Double> convertRateEntry : convertRateMap.entrySet()) {
+            String pageSplit = convertRateEntry.getKey();
+            double convertRate = convertRateEntry.getValue();
+            buffer.append(pageSplit + "=" + convertRate + "|");
+        }
+
+        String convertRate = buffer.toString();
+        convertRate = convertRate.substring(0, convertRate.length() - 1);
+
+        PageSplitConvertRate pageSplitConvertRate = new PageSplitConvertRate();
+        pageSplitConvertRate.setTaskid(taskid);
+        pageSplitConvertRate.setConvertRate(convertRate);
+
+        IPageSplitConvertRateDAO pageSplitConvertRateDAO = DAOFactory.getPageSplitConvertRateDAO();
+        pageSplitConvertRateDAO.insert(pageSplitConvertRate);
     }
 }

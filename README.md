@@ -100,6 +100,38 @@ spark-submit \
 ##### 5. 生产环境测试
 * Hive表测试
 
+```$xslt
+hive> create table user_visit_action( 
+        date string,    
+        user_id bigint, 
+        session_id string,  
+        page_id bigint, 
+        action_time string, 
+        search_keyword string,  
+        click_category_id bigint,   
+        click_product_id bigint,    
+        order_category_ids string,  
+        pay_category_ids string,    
+        pay_product_ids string  
+        );
+
+hive> load data local inpath '/home/sotowang/user/aur/ide/idea/idea-IU-182.3684.101/workspace/sparkhomework/user_visit_action.txt' overwrite into table user_visit_action;
+
+hive> create table user_info(
+    user_id bigint,
+    username string,
+    name string,
+    age bigint,
+    professional string,
+    city string,
+    sex string
+    );
+
+hive> load data local inpath '/home/sotowang/user/aur/ide/idea/idea-IU-182.3684.101/workspace/sparkhomework/user_info.txt' into table user_info;
+
+
+```
+
 
 
 

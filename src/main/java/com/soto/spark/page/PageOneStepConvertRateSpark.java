@@ -32,14 +32,14 @@ public class PageOneStepConvertRateSpark {
     public static void main(String[] args) {
         //1.构造spark上下文
         SparkConf conf = new SparkConf()
-                .setAppName(Constants.SPARK_APP_NAME_PAGE)
-                ;
+                .setAppName(Constants.SPARK_APP_NAME_PAGE);
+
+        SparkUtils.setMaster(conf);
 
         JavaSparkContext sc = new JavaSparkContext(conf);
         SQLContext sqlContext = SparkUtils.getSQLContext(sc.sc());
 
 
-        SparkUtils.setMaster(conf);
 
 
         //2.生成模拟数据

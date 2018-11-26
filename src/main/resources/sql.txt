@@ -79,6 +79,14 @@ CREATE TABLE `task` (
   PRIMARY KEY (`task_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=0 DEFAULT CHARSET=utf8
 
+页面切片转化率表
+CREATE TABLE spark_project.page_split_convert_rate (
+	taskid INT NULL,
+	convert_rate varchar(255) NULL
+)
+ENGINE=InnoDB
+DEFAULT CHARSET=utf8
+COLLATE=utf8_general_ci;
 
 
 

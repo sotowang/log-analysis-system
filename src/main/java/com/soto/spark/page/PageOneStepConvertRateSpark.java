@@ -6,6 +6,7 @@ import com.soto.dao.ITaskDAO;
 import com.soto.dao.impl.DAOFactory;
 import com.soto.domain.Task;
 import com.soto.util.DateUtils;
+import com.soto.util.NumberUtils;
 import com.soto.util.ParamUtils;
 import com.soto.util.SparkUtils;
 import org.apache.spark.SparkConf;
@@ -71,7 +72,9 @@ public class PageOneStepConvertRateSpark {
                 sc, sessionid2actionsRDD, taskParam);
         Map<String, Object> pageSplitPvMap = pageSplitRDD.countByKey();
 
-
+        // 使用者指定的页面流是3,2,5,8,6
+        // 现在拿到的这个pageSplitPvMap，3->2，2->5，5->8，8->6
+        long startPagePv = getStartPagePv(taskParam, sessionid2actionsRDD);
 
 
 
@@ -250,4 +253,50 @@ public class PageOneStepConvertRateSpark {
         return startPageRDD.count();
     }
 
+
+    /**
+     * 计算页面切片转化率
+     * @param pageSplitPvMap 页面切片pv
+     * @param startPagePv 起始页面pv
+     * @return
+     */
+    private static Map<String, Double> computePageSplitConvertRate(
+            JSONObject taskParam,
+            Map<String, Object> pageSplitPvMap,
+            long startPagePv) {
+        Map<String, Double> convertRateMap = new HashMap<String, Double>();
+
+        String[] targetPages = ParamUtils.getParam(taskParam,
+                Constants.PARAM_TARGET_PAGE_FLOW).split(",");
+
+        long lastPageSplitPv = 0L;
+
+        // 3,5,2,4,6
+        // 3_5
+        // 3_5 pv / 3 pv
+        // 5_2 rate = 5_2 pv / 3_5 pv
+
+        // 通过for循环，获取目标页面流中的各个页面切片（pv）
+        for(int i = 1; i < targetPages.length; i++) {
+            String targetPageSplit = targetPages[i - 1] + "_" + targetPages[i];
+            long targetPageSplitPv = Long.valueOf(String.valueOf(
+                    pageSplitPvMap.get(targetPageSplit)));
+
+            double convertRate = 0.0;
+
+            if(i == 1) {
+                convertRate = NumberUtils.formatDouble(
+                        (double)targetPageSplitPv / (double)startPagePv, 2);
+            } else {
+                convertRate = NumberUtils.formatDouble(
+                        (double)targetPageSplitPv / (double)lastPageSplitPv, 2);
+            }
+
+            convertRateMap.put(targetPageSplit, convertRate);
+
+            lastPageSplitPv = targetPageSplitPv;
+        }
+
+        return convertRateMap;
+    }
 }

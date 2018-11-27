@@ -48,8 +48,15 @@ session粒度聚合，按筛选条件进行过滤
 ```$xslt
 获取top10 热门品类中，每个品类点击次数最多的10个session
 ```
+##### 2. 第二个模块：页面单跳转化率
 
-##### 3. 技术点和知识点
+
+##### 3. 第三个模块：页面单跳转化率
+
+---
+
+
+#####  技术点和知识点
 
 * 大数据项目的架构（公共组件的封装，包的划分，代码的规范）
 
@@ -61,7 +68,7 @@ session粒度聚合，按筛选条件进行过滤
 
 * 大数据项目开发流程：数据调研 需求分析 技术方案设计 数据库设计 编码实现 单元测试 本地测试
 
-##### 4. 性能调优
+#####  性能调优
 
 ###### 常规调优
 
@@ -97,7 +104,7 @@ spark-submit \
 * 数据倾斜解决
 * troubleshotting
 
-##### 5. 生产环境测试
+#####  生产环境测试
 * Hive表测试
 
 ```$xslt
@@ -121,7 +128,7 @@ hive> create table user_info(
     user_id bigint,
     username string,
     name string,
-    age bigint,
+    age int,
     professional string,
     city string,
     sex string

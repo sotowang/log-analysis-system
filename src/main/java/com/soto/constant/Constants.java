@@ -24,6 +24,7 @@ public interface Constants {
     String SPARK_LOCAL = "spark.local";
     String SPARK_LOCAL_TASKID_SESSION = "spark.local.taskid.session";
     String SPARK_LOCAL_TASKID_PAGE = "spark.local.taskid.page";
+    String SPARK_LOCAL_TASKID_PRODUCT = "spark.local.taskid.product";
 
 
     /**

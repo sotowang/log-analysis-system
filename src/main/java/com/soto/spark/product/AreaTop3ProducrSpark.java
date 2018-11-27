@@ -43,17 +43,17 @@ public class AreaTop3ProducrSpark {
         JavaSparkContext sc = new JavaSparkContext(conf);
         SQLContext sqlContext = SparkUtils.getSQLContext(sc.sc());
 
-//        // 注册自定义函数
-//        sqlContext.udf().register("concat_long_string",
-//                new ConcatLongStringUDF(), DataTypes.StringType);
+        // 注册自定义函数
+        sqlContext.udf().register("concat_long_string",
+                new ConcatLongStringUDF(), DataTypes.StringType);
 //        sqlContext.udf().register("get_json_object",
 //                new GetJsonObjectUDF(), DataTypes.StringType);
 //        sqlContext.udf().register("random_prefix",
 //                new RandomPrefixUDF(), DataTypes.StringType);
 //        sqlContext.udf().register("remove_random_prefix",
 //                new RemoveRandomPrefixUDF(), DataTypes.StringType);
-//        sqlContext.udf().register("group_concat_distinct",
-//                new GroupConcatDistinctUDAF());
+        sqlContext.udf().register("group_concat_distinct",
+                new GroupConcatDistinctUDAF());
 
 
         // 准备模拟数据
@@ -72,10 +72,18 @@ public class AreaTop3ProducrSpark {
         String endDate = ParamUtils.getParam(taskParam, Constants.PARAM_END_DATE);
 
 
-        JavaPairRDD<Long,Row> clickActionRDD = getcityid2ClickActionRDDByDate(sqlContext, startDate, endDate);
+        // 查询用户指定日期范围内的点击行为数据（city_id，在哪个城市发生的点击行为）
+        // 技术点1：Hive数据源的使用
+        JavaPairRDD<Long,Row> cityid2clickActionRDD = getcityid2ClickActionRDDByDate(sqlContext, startDate, endDate);
 
         // 从MySQL中查询城市信息
-        JavaPairRDD<Long, Row> cityInfoRDD = getcityid2CityInfoRDD(sqlContext);
+        // 技术点2：异构数据源之MySQL的使用
+        JavaPairRDD<Long, Row> cityid2cityInfoRDD = getcityid2CityInfoRDD(sqlContext);
+
+
+        // 生成点击商品基础信息临时表
+        // 技术点3：将RDD转换为DataFrame，并注册临时表
+        generateTempClickProductBasicTable(sqlContext, cityid2clickActionRDD, cityid2cityInfoRDD);
 
 
         sc.close();
@@ -231,6 +239,16 @@ public class AreaTop3ProducrSpark {
         structFields.add(DataTypes.createStructField("area", DataTypes.StringType, true));
         structFields.add(DataTypes.createStructField("product_id", DataTypes.LongType, true));
 
+
+        // 1 北京
+        // 2 上海
+        // 1 北京
+        // group by area,product_id
+        // 1:北京,2:上海
+
+        // 两个函数
+        // UDF：concat2()，将两个字段拼接起来，用指定的分隔符
+        // UDAF：group_concat_distinct()，将一个分组中的多个字段值，用逗号拼接起来，同时进行去重
 
         StructType schema = DataTypes.createStructType(structFields);
 

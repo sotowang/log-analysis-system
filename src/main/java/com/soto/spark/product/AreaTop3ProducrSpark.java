@@ -12,13 +12,20 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.PairFunction;
 import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.SQLContext;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType;
 import scala.Tuple2;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -172,6 +179,67 @@ public class AreaTop3ProducrSpark {
                 });
 
         return cityid2cityInfoRDD;
+
+    }
+
+    /**
+     * 生成点击商品基础信息临时表
+     * @param sqlContext
+     * @param cityid2clickActionRDD
+     * @param cityid2cityInfoRDD
+     */
+    private static void generateTempClickProductBasicTable(
+            SQLContext sqlContext,
+            JavaPairRDD<Long, Row> cityid2clickActionRDD,
+            JavaPairRDD<Long, Row> cityid2cityInfoRDD) {
+
+
+        // 执行join操作，进行点击行为数据和城市数据的关联
+        JavaPairRDD<Long, Tuple2<Row, Row>> joinedRDD =
+                cityid2clickActionRDD.join(cityid2cityInfoRDD);
+
+
+
+        // 将上面的JavaPairRDD，转换成一个JavaRDD<Row>（才能将RDD转换为DataFrame）
+        JavaRDD<Row> mappedRDD = joinedRDD.map(
+
+                new Function<Tuple2<Long,Tuple2<Row,Row>>, Row>() {
+
+                    private static final long serialVersionUID = 1L;
+
+                    @Override
+                    public Row call(Tuple2<Long, Tuple2<Row, Row>> tuple)
+                            throws Exception {
+                        long cityid = tuple._1;
+                        Row clickAction = tuple._2._1;
+                        Row cityInfo = tuple._2._2;
+
+                        long productid = clickAction.getLong(1);
+                        String cityName = cityInfo.getString(1);
+                        String area = cityInfo.getString(2);
+
+                        return RowFactory.create(cityid, cityName, area, productid);
+                    }
+
+                });
+
+
+        // 基于JavaRDD<Row>的格式，就可以将其转换为DataFrame
+        List<StructField> structFields = new ArrayList<StructField>();
+        structFields.add(DataTypes.createStructField("city_id", DataTypes.LongType, true));
+        structFields.add(DataTypes.createStructField("city_name", DataTypes.StringType, true));
+        structFields.add(DataTypes.createStructField("area", DataTypes.StringType, true));
+        structFields.add(DataTypes.createStructField("product_id", DataTypes.LongType, true));
+
+
+        StructType schema = DataTypes.createStructType(structFields);
+
+        DataFrame df = sqlContext.createDataFrame(mappedRDD, schema);
+        System.out.println("tmp_click_product_basic: " + df.count());
+
+        // 将DataFrame中的数据，注册成临时表（tmp_click_product_basic）
+        df.registerTempTable("tmp_click_product_basic");
+
 
     }
 }

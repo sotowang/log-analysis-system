@@ -48,10 +48,10 @@ public class AreaTop3ProducrSpark {
                 new ConcatLongStringUDF(), DataTypes.StringType);
 //        sqlContext.udf().register("get_json_object",
 //                new GetJsonObjectUDF(), DataTypes.StringType);
-//        sqlContext.udf().register("random_prefix",
-//                new RandomPrefixUDF(), DataTypes.StringType);
-//        sqlContext.udf().register("remove_random_prefix",
-//                new RemoveRandomPrefixUDF(), DataTypes.StringType);
+        sqlContext.udf().register("random_prefix",
+                new RandomPrefixUDF(), DataTypes.StringType);
+        sqlContext.udf().register("remove_random_prefix",
+                new RemoveRandomPrefixUDF(), DataTypes.StringType);
         sqlContext.udf().register("group_concat_distinct",
                 new GroupConcatDistinctUDAF());
 
@@ -292,6 +292,38 @@ public class AreaTop3ProducrSpark {
                         + "FROM tmp_click_product_basic "
                         + "GROUP BY area,product_id ";
 
+
+        /**
+         * 双重group by
+         */
+
+		String _sql =
+				"SELECT "
+					+ "product_id_area,"
+					+ "count(click_count) click_count,"
+					+ "group_concat_distinct(city_infos) city_infos "
+				+ "FROM ( "
+					+ "SELECT "
+						+ "remove_random_prefix(product_id_area) product_id_area,"
+						+ "click_count,"
+						+ "city_infos "
+					+ "FROM ( "
+						+ "SELECT "
+							+ "product_id_area,"
+							+ "count(*) click_count,"
+							+ "group_concat_distinct(concat_long_string(city_id,city_name,':')) city_infos "
+						+ "FROM ( "
+							+ "SELECT "
+								+ "random_prefix(concat_long_string(product_id,area,':'), 10) product_id_area,"
+								+ "city_id,"
+								+ "city_name "
+							+ "FROM tmp_click_product_basic "
+						+ ") t1 "
+						+ "GROUP BY product_id_area "
+					+ ") t2 "
+				+ ") t3 "
+				+ "GROUP BY product_id_area ";
+
         // 使用Spark SQL执行这条SQL语句
         DataFrame df = sqlContext.sql(sql);
 
@@ -366,6 +398,19 @@ public class AreaTop3ProducrSpark {
      */
     private static void generateTempAreaFullProductClickCountTable(SQLContext sqlContext) {
 
+
+        // 将之前得到的各区域各商品点击次数表，product_id
+        // 去关联商品信息表，product_id，product_name和product_status
+        // product_status要特殊处理，0，1，分别代表了自营和第三方的商品，放在了一个json串里面
+        // get_json_object()函数，可以从json串中获取指定的字段的值
+        // if()函数，判断，如果product_status是0，那么就是自营商品；如果是1，那么就是第三方商品
+        // area, product_id, click_count, city_infos, product_name, product_status
+
+        // 为什么要费时费力，计算出来商品经营类型
+        // 你拿到到了某个区域top3热门的商品，那么其实这个商品是自营的，还是第三方的
+        // 其实是很重要的一件事
+
+        // 技术点：内置if函数的使用
         String sql =
                 "SELECT "
                         + "tapcc.area,"
@@ -377,6 +422,54 @@ public class AreaTop3ProducrSpark {
                         + "FROM tmp_area_product_click_count tapcc "
                         + "JOIN product_info pi ON tapcc.product_id=pi.product_id ";
 
+
+        //		JavaRDD<Row> rdd = sqlContext.sql("select * from product_info").javaRDD();
+//		JavaRDD<Row> flattedRDD = rdd.flatMap(new FlatMapFunction<Row, Row>() {
+//
+//			private static final long serialVersionUID = 1L;
+//
+//			@Override
+//			public Iterable<Row> call(Row row) throws Exception {
+//				List<Row> list = new ArrayList<Row>();
+//
+//				for(int i = 0; i < 10; i ++) {
+//					long productid = row.getLong(0);
+//					String _productid = i + "_" + productid;
+//
+//					Row _row = RowFactory.create(_productid, row.get(1), row.get(2));
+//					list.add(_row);
+//				}
+//
+//				return list;
+//			}
+//
+//		});
+//
+//		StructType _schema = DataTypes.createStructType(Arrays.asList(
+//				DataTypes.createStructField("product_id", DataTypes.StringType, true),
+//				DataTypes.createStructField("product_name", DataTypes.StringType, true),
+//				DataTypes.createStructField("product_status", DataTypes.StringType, true)));
+//
+//		DataFrame _df = sqlContext.createDataFrame(flattedRDD, _schema);
+//		_df.registerTempTable("tmp_product_info");
+//
+//		String _sql =
+//				"SELECT "
+//					+ "tapcc.area,"
+//					+ "remove_random_prefix(tapcc.product_id) product_id,"
+//					+ "tapcc.click_count,"
+//					+ "tapcc.city_infos,"
+//					+ "pi.product_name,"
+//					+ "if(get_json_object(pi.extend_info,'product_status')=0,'自营商品','第三方商品') product_status "
+//				+ "FROM ("
+//					+ "SELECT "
+//						+ "area,"
+//						+ "random_prefix(product_id, 10) product_id,"
+//						+ "click_count,"
+//						+ "city_infos "
+//					+ "FROM tmp_area_product_click_count "
+//				+ ") tapcc "
+//				+ "JOIN tmp_product_info pi ON tapcc.product_id=pi.product_id ";
 
         DataFrame df = sqlContext.sql(sql);
 

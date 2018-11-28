@@ -86,8 +86,22 @@ public class AreaTop3ProducrSpark {
         generateTempClickProductBasicTable(sqlContext, cityid2clickActionRDD, cityid2cityInfoRDD);
 
 
+        // 生成各区域各商品点击次数的临时表
+        generateTempAreaPrdocutClickCountTable(sqlContext);
+
+        // 生成包含完整商品信息的各区域各商品点击次数的临时表
+        generateTempAreaFullProductClickCountTable(sqlContext);
+
+
+        // 使用开窗函数获取各个区域内点击次数排名前3的热门商品
+        JavaRDD<Row> areaTop3ProductRDD = getAreaTop3ProductRDD(sqlContext);
+        System.out.println("areaTop3ProductRDD: " + areaTop3ProductRDD.count());
+
+
         sc.close();
     }
+
+
 
 
     /**
@@ -258,6 +272,117 @@ public class AreaTop3ProducrSpark {
         // 将DataFrame中的数据，注册成临时表（tmp_click_product_basic）
         df.registerTempTable("tmp_click_product_basic");
 
+
+    }
+
+    /**
+     * 生成各区域各商品点击次数临时表
+     * @param sqlContext
+     */
+    private static void generateTempAreaPrdocutClickCountTable(SQLContext sqlContext) {
+        // 按照area和product_id两个字段进行分组
+        // 计算出各区域各商品的点击次数
+        // 可以获取到每个area下的每个product_id的城市信息拼接起来的串
+        String sql =
+                "SELECT "
+                        + "area,"
+                        + "product_id,"
+                        + "count(*) click_count, "
+                        + "group_concat_distinct(concat_long_string(city_id,city_name,':')) city_infos "
+                        + "FROM tmp_click_product_basic "
+                        + "GROUP BY area,product_id ";
+
+        // 使用Spark SQL执行这条SQL语句
+        DataFrame df = sqlContext.sql(sql);
+
+        System.out.println("tmp_area_product_click_count: " + df.count());
+
+        // 再次将查询出来的数据注册为一个临时表
+        // 各区域各商品的点击次数（以及额外的城市列表）
+        df.registerTempTable("tmp_area_product_click_count");
+
+    }
+
+    /**
+     * 获取各区域top3热门商品
+     * @param sqlContext
+     * @return
+     */
+    private static JavaRDD<Row> getAreaTop3ProductRDD(SQLContext sqlContext) {
+
+        // 技术点：开窗函数
+
+        // 使用开窗函数先进行一个子查询
+        // 按照area进行分组，给每个分组内的数据，按照点击次数降序排序，打上一个组内的行号
+        // 接着在外层查询中，过滤出各个组内的行号排名前3的数据
+        // 其实就是各个区域下top3热门商品
+
+        // 华北、华东、华南、华中、西北、西南、东北
+        // A级：华北、华东
+        // B级：华南、华中
+        // C级：西北、西南
+        // D级：东北
+
+        // case when
+        // 根据多个条件，不同的条件对应不同的值
+        // case when then ... when then ... else ... end
+        String sql =
+                "SELECT "
+                        + "area,"
+                        + "CASE "
+                        + "WHEN area='China North' OR area='China East' THEN 'A Level' "
+                        + "WHEN area='China South' OR area='China Middle' THEN 'B Level' "
+                        + "WHEN area='West North' OR area='West South' THEN 'C Level' "
+                        + "ELSE 'D Level' "
+                        + "END area_level,"
+                        + "product_id,"
+                        + "click_count,"
+                        + "city_infos,"
+                        + "product_name,"
+                        + "product_status "
+                        + "FROM ("
+                        + "SELECT "
+                        + "area,"
+                        + "product_id,"
+                        + "click_count,"
+                        + "city_infos,"
+                        + "product_name,"
+                        + "product_status,"
+                        + "row_number() OVER (PARTITION BY area ORDER BY click_count DESC) rank "
+                        + "FROM tmp_area_fullprod_click_count "
+                        + ") t "
+                        + "WHERE rank<=3";
+
+        DataFrame df = sqlContext.sql(sql);
+
+        return df.javaRDD();
+
+
+    }
+
+    /**
+     * 生成区域商品点击次数临时表（包含了商品的完整信息）
+     * @param sqlContext
+     */
+    private static void generateTempAreaFullProductClickCountTable(SQLContext sqlContext) {
+
+        String sql =
+                "SELECT "
+                        + "tapcc.area,"
+                        + "tapcc.product_id,"
+                        + "tapcc.click_count,"
+                        + "tapcc.city_infos,"
+                        + "pi.product_name,"
+                        + "if(get_json_object(pi.extend_info,'product_status')='0','Self','Third Party') product_status "
+                        + "FROM tmp_area_product_click_count tapcc "
+                        + "JOIN product_info pi ON tapcc.product_id=pi.product_id ";
+
+
+        DataFrame df = sqlContext.sql(sql);
+
+        System.out.println("tmp_area_fullprod_click_count: " + df.count());
+
+        df.registerTempTable("tmp_area_fullprod_click_count");
 
     }
 }

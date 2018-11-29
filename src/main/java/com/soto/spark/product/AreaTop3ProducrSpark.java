@@ -123,10 +123,8 @@ public class AreaTop3ProducrSpark {
                         + "click_product_id product_id "
                         + "FROM user_visit_action "
                         + "WHERE click_product_id IS NOT NULL "
-                        + "AND click_product_id != 'NULL'"
-                        + "AND click_product_id != 'null'"
-                        + "AND action_time>='" + startDate + "' "
-                        + "AND action_time<='" + endDate + "'";
+                        + "AND date >='" + startDate + "' "
+                        + "AND date <='" + endDate + "'";
         DataFrame clickActionDF = sqlContext.sql(sql);
 
         JavaRDD<Row> clickActionRDD = clickActionDF.javaRDD();
@@ -384,7 +382,16 @@ public class AreaTop3ProducrSpark {
                         + "FROM tmp_area_fullprod_click_count "
                         + ") t "
                         + "WHERE rank<=3";
-
+// SELECT
+//  area,
+// CASE
+//      WHEN area='China North' OR area='China East' THEN 'A Level'
+//      WHEN area='China South' OR area='China Middle' THEN 'B Level'
+//      WHEN area='West North' OR area='West South' THEN 'C Level'
+//      ELSE 'D Level' END area_level,
+//      product_id,click_count,city_infos,product_name,product_status
+//  FROM (SELECT area,product_id,click_count,city_infos,product_name,product_status,row_number() OVER (PARTITION BY area ORDER BY click_count DESC)
+// rank FROM tmp_area_fullprod_click_count ) t WHERE rank<=3
         DataFrame df = sqlContext.sql(sql);
 
         return df.javaRDD();

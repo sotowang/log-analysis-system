@@ -126,8 +126,10 @@ hive> create table user_visit_action(
         click_category_id bigint,   
         click_product_id bigint,    
         order_category_ids string,  
+        order_product_ids string,
         pay_category_ids string,    
-        pay_product_ids string  
+        pay_product_ids string,
+        city_id bigint  
         );
 
 hive> load data local inpath '/home/sotowang/user/aur/ide/idea/idea-IU-182.3684.101/workspace/sparkhomework/user_visit_action.txt' overwrite into table user_visit_action;
@@ -143,6 +145,15 @@ hive> create table user_info(
     );
 
 hive> load data local inpath '/home/sotowang/user/aur/ide/idea/idea-IU-182.3684.101/workspace/sparkhomework/user_info.txt' into table user_info;
+
+
+hive> create table product_info(
+      product_id bigint,
+      product_name string,
+      extend_info string
+      ); 
+      
+hive> load data local inpath '/home/sotowang/user/aur/ide/idea/idea-IU-182.3684.101/workspace/sparkhomework/product_info.txt' into table product_info;
 
 
 ```

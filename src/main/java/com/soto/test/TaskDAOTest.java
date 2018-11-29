@@ -1,7 +1,7 @@
 package com.soto.test;
 
 import com.soto.dao.ITaskDAO;
-import com.soto.dao.impl.DAOFactory;
+import com.soto.dao.factory.DAOFactory;
 import com.soto.domain.Task;
 
 /**

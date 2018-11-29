@@ -1,6 +1,7 @@
-package com.soto.dao.impl;
+package com.soto.dao.factory;
 
 import com.soto.dao.*;
+import com.soto.dao.impl.*;
 
 /**
  * DAO工厂类
@@ -50,6 +51,10 @@ public class DAOFactory {
 
     public static IAdStatDAO getAdStatDAO() {
         return new AdStatDAOImpl();
+    }
+
+    public static IAdProvinceTop3DAO getAdProvinceTop3DAO() {
+        return new AdProvinceTop3DAOImpl();
     }
 
 }

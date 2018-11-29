@@ -43,4 +43,8 @@ public class DAOFactory {
         return new AdUserClickCountDAOImpl();
     }
 
+    public static IAdBlacklistDAO getAdBlacklistDAO() {
+        return new AdBlacklistDAOImpl();
+    }
+
 }

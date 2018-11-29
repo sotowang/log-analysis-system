@@ -23,10 +23,7 @@ import org.apache.spark.sql.hive.HiveContext;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.streaming.Durations;
-import org.apache.spark.streaming.api.java.JavaDStream;
-import org.apache.spark.streaming.api.java.JavaPairDStream;
-import org.apache.spark.streaming.api.java.JavaPairInputDStream;
-import org.apache.spark.streaming.api.java.JavaStreamingContext;
+import org.apache.spark.streaming.api.java.*;
 import org.apache.spark.streaming.kafka.KafkaUtils;
 import scala.Tuple2;
 
@@ -42,6 +39,7 @@ public class AdClickRealTimeSpark {
         SparkConf conf = new SparkConf()
                 .setMaster("local[2]")
                 .setAppName("AdClickRealTimeStatSpark");
+//                .set("spark.streaming.receiver.writeAheadLog.enable", "true"); ;   //预写日志
 
 
         // spark streaming的上下文是构建JavaStreamingContext对象
@@ -61,6 +59,8 @@ public class AdClickRealTimeSpark {
         JavaStreamingContext jssc = new JavaStreamingContext(
                 conf, Durations.seconds(5));
 
+
+        jssc.checkpoint("hdfs://sotowang-pc:9000/streaming_checkpoint");
 
         // 创建针对Kafka数据来源的输入DStream（离线流，代表了一个源源不断的数据来源，抽象）
         // 构建kafka参数map
@@ -899,5 +899,58 @@ public class AdClickRealTimeSpark {
             }
 
         });
+    }
+
+    private static void testDriverHA() {
+        final String checkpointDir = "hdfs://sotowang-pc/streaming_checkpoint";
+
+        JavaStreamingContextFactory contextFactory = new JavaStreamingContextFactory() {
+
+            @Override
+            public JavaStreamingContext create() {
+                SparkConf conf = new SparkConf()
+                        .setMaster("local[2]")
+                        .setAppName("AdClickRealTimeStatSpark");
+
+                JavaStreamingContext jssc = new JavaStreamingContext(
+                        conf, Durations.seconds(5));
+                jssc.checkpoint(checkpointDir);
+
+                Map<String, String> kafkaParams = new HashMap<String, String>();
+                kafkaParams.put(Constants.KAFKA_METADATA_BROKER_LIST,
+                        ConfigurationManager.getProperty(Constants.KAFKA_METADATA_BROKER_LIST));
+                String kafkaTopics = ConfigurationManager.getProperty(Constants.KAFKA_TOPICS);
+                String[] kafkaTopicsSplited = kafkaTopics.split(",");
+                Set<String> topics = new HashSet<String>();
+                for(String kafkaTopic : kafkaTopicsSplited) {
+                    topics.add(kafkaTopic);
+                }
+
+                JavaPairInputDStream<String, String> adRealTimeLogDStream = KafkaUtils.createDirectStream(
+                        jssc,
+                        String.class,
+                        String.class,
+                        StringDecoder.class,
+                        StringDecoder.class,
+                        kafkaParams,
+                        topics);
+
+                JavaPairDStream<String, String> filteredAdRealTimeLogDStream =
+                        filterByBlacklist(adRealTimeLogDStream);
+                generateDynamicBlacklist(filteredAdRealTimeLogDStream);
+                JavaPairDStream<String, Long> adRealTimeStatDStream = calculateRealTimeStat(
+                        filteredAdRealTimeLogDStream);
+                calculateProvinceTop3Ad(adRealTimeStatDStream);
+                calculateAdClickCountByWindow(adRealTimeLogDStream);
+
+                return jssc;
+            }
+
+        };
+
+        JavaStreamingContext context = JavaStreamingContext.getOrCreate(
+                checkpointDir, contextFactory);
+        context.start();
+        context.awaitTermination();
     }
 }

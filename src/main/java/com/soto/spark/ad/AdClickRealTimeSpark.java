@@ -3,15 +3,9 @@ package com.soto.spark.ad;
 import com.google.common.base.Optional;
 import com.soto.conf.ConfigurationManager;
 import com.soto.constant.Constants;
-import com.soto.dao.IAdBlacklistDAO;
-import com.soto.dao.IAdProvinceTop3DAO;
-import com.soto.dao.IAdStatDAO;
-import com.soto.dao.IAdUserClickCountDAO;
+import com.soto.dao.*;
 import com.soto.dao.factory.DAOFactory;
-import com.soto.domain.AdBlacklist;
-import com.soto.domain.AdProvinceTop3;
-import com.soto.domain.AdStat;
-import com.soto.domain.AdUserClickCount;
+import com.soto.domain.*;
 import com.soto.util.DateUtils;
 import kafka.serializer.StringDecoder;
 import org.apache.spark.SparkConf;
@@ -114,6 +108,14 @@ public class AdClickRealTimeSpark {
         calculateProvinceTop3Ad(adRealTimeStatDStream);
 
 
+        // 业务功能三：实时统计每天每个广告在最近1小时的滑动窗口内的点击趋势（每分钟的点击量）
+        // 统计的非常细了
+        // 我们每次都可以看到每个广告，最近一小时内，每分钟的点击量
+        // 每支广告的点击趋势
+        calculateAdClickCountByWindow(adRealTimeLogDStream);
+
+
+
 
         // 构建完spark streaming上下文之后，要进行上下文的启动、等待执行结束、关闭
         jssc.start();
@@ -122,6 +124,8 @@ public class AdClickRealTimeSpark {
 
 
     }
+
+
 
 
     private static JavaPairDStream<String, String> filterByBlacklist(JavaPairInputDStream<String, String> adRealTimeLogDStream) {
@@ -793,5 +797,107 @@ public class AdClickRealTimeSpark {
 
         });
 
+    }
+
+    /**
+     * 计算最近1小时滑动窗口内的广告点击趋势
+     *
+     * @param adRealTimeLogDStream
+     */
+    private static void calculateAdClickCountByWindow(JavaPairInputDStream<String, String> adRealTimeLogDStream) {
+
+        // 映射成<yyyyMMddHHMM_adid,1L>格式
+        JavaPairDStream<String, Long> pairDStream = adRealTimeLogDStream.mapToPair(
+
+                new PairFunction<Tuple2<String,String>, String, Long>() {
+
+                    private static final long serialVersionUID = 1L;
+
+                    @Override
+                    public Tuple2<String, Long> call(Tuple2<String, String> tuple)
+                            throws Exception {
+                        // timestamp province city userid adid
+                        String[] logSplited = tuple._2.split(" ");
+                        String timeMinute = DateUtils.formatTimeMinute(
+                                new Date(Long.valueOf(logSplited[0])));
+                        long adid = Long.valueOf(logSplited[4]);
+
+                        return new Tuple2<String, Long>(timeMinute + "_" + adid, 1L);
+                    }
+
+                });
+
+        // 过来的每个batch rdd，都会被映射成<yyyyMMddHHMM_adid,1L>的格式
+        // 每次出来一个新的batch，都要获取最近1小时内的所有的batch
+        // 然后根据key进行reduceByKey操作，统计出来最近一小时内的各分钟各广告的点击次数
+        // 1小时滑动窗口内的广告点击趋势
+        // 点图 / 折线图
+
+        JavaPairDStream<String, Long> aggrRDD = pairDStream.reduceByKeyAndWindow(
+
+                new Function2<Long, Long, Long>() {
+
+                    private static final long serialVersionUID = 1L;
+
+                    @Override
+                    public Long call(Long v1, Long v2) throws Exception {
+                        return v1 + v2;
+                    }
+
+                }, Durations.minutes(60), Durations.seconds(10));
+
+
+        // aggrRDD
+        // 每次都可以拿到，最近1小时内，各分钟（yyyyMMddHHMM）各广告的点击量
+        // 各广告，在最近1小时内，各分钟的点击量
+        aggrRDD.foreachRDD(new Function<JavaPairRDD<String,Long>, Void>() {
+
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Void call(JavaPairRDD<String, Long> rdd) throws Exception {
+
+                rdd.foreachPartition(new VoidFunction<Iterator<Tuple2<String,Long>>>() {
+
+                    private static final long serialVersionUID = 1L;
+
+                    @Override
+                    public void call(Iterator<Tuple2<String, Long>> iterator)
+                            throws Exception {
+                        List<AdClickTrend> adClickTrends = new ArrayList<AdClickTrend>();
+
+                        while(iterator.hasNext()) {
+                            Tuple2<String, Long> tuple = iterator.next();
+                            String[] keySplited = tuple._1.split("_");
+                            // yyyyMMddHHmm
+                            String dateMinute = keySplited[0];
+                            long adid = Long.valueOf(keySplited[1]);
+                            long clickCount = tuple._2;
+
+                            String date = DateUtils.formatDate(DateUtils.parseDateKey(
+                                    dateMinute.substring(0, 8)));
+                            String hour = dateMinute.substring(8, 10);
+                            String minute = dateMinute.substring(10);
+
+                            AdClickTrend adClickTrend = new AdClickTrend();
+                            adClickTrend.setDate(date);
+                            adClickTrend.setHour(hour);
+                            adClickTrend.setMinute(minute);
+                            adClickTrend.setAdid(adid);
+                            adClickTrend.setClickCount(clickCount);
+
+                            adClickTrends.add(adClickTrend);
+                        }
+
+                        IAdClickTrendDAO adClickTrendDAO = DAOFactory.getAdClickTrendDAO();
+                        adClickTrendDAO.updateBatch(adClickTrends);
+                    }
+
+                });
+
+                return null;
+            }
+
+        });
     }
 }

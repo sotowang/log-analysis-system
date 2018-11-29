@@ -9,9 +9,10 @@ import com.soto.dao.impl.*;
 public class DAOFactory {
     /**
      * 获取任务管理DAO
+     *
      * @return
      */
-    public static ITaskDAO getTaskDAO(){
+    public static ITaskDAO getTaskDAO() {
         return new TaskDAOImpl();
     }
 
@@ -56,5 +57,10 @@ public class DAOFactory {
     public static IAdProvinceTop3DAO getAdProvinceTop3DAO() {
         return new AdProvinceTop3DAOImpl();
     }
+
+    public static IAdClickTrendDAO getAdClickTrendDAO() {
+        return new AdClickTrendDAOImpl();
+    }
+
 
 }

@@ -162,6 +162,20 @@ public class DateUtils {
         return simpleDateFormat.format(date);
     }
 
+    /**
+     * 格式化日期key
+     * @param datekey
+     * @return
+     */
+    public static Date parseDateKey(String datekey) {
+        try {
+            return DATEKEY_FORMAT.parse(datekey);
+        } catch (ParseException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
 
     public static void main(String[] args) {
         System.out.println(getDateHour("2018-11-11 13:55:27"));

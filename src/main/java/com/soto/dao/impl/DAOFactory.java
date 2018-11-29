@@ -37,4 +37,10 @@ public class DAOFactory {
     public static IPageSplitConvertRateDAO getPageSplitConvertRateDAO() {
         return new PageSplitConvertRateDAOImpl();
     }
+
+
+    public static IAdUserClickCountDAO getAdUserClickCountDAO() {
+        return new AdUserClickCountDAOImpl();
+    }
+
 }

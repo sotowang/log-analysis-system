@@ -58,4 +58,8 @@ public class AdBlacklistDAOImpl implements IAdBlacklistDAO {
 
         return adBlacklists;
     }
+
+
+
+
 }

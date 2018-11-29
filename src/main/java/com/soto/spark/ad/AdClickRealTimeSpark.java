@@ -4,9 +4,11 @@ import com.google.common.base.Optional;
 import com.soto.conf.ConfigurationManager;
 import com.soto.constant.Constants;
 import com.soto.dao.IAdBlacklistDAO;
+import com.soto.dao.IAdStatDAO;
 import com.soto.dao.IAdUserClickCountDAO;
 import com.soto.dao.impl.DAOFactory;
 import com.soto.domain.AdBlacklist;
+import com.soto.domain.AdStat;
 import com.soto.domain.AdUserClickCount;
 import com.soto.util.DateUtils;
 import kafka.serializer.StringDecoder;
@@ -93,6 +95,10 @@ public class AdClickRealTimeSpark {
         // 生成动态黑名单
         generateDynamicBlacklist(filteredAdRealTimeLogDStream);
 
+
+        // 业务功能一：计算广告点击流量实时统计结果（yyyyMMdd_province_city_adid,clickCount）
+        JavaPairDStream<String, Long> adRealTimeStatDStream = calculateRealTimeStat(
+                filteredAdRealTimeLogDStream);
 
         // 构建完spark streaming上下文之后，记得要进行上下文的启动、等待执行结束、关闭
         jssc.start();
@@ -470,19 +476,139 @@ public class AdClickRealTimeSpark {
 
         });
 
-        // 特别前面三个模块
-        // 我们测试到后面的时候，其实会不断修改程序，有些程序，是跟前面的模块公用的
-        // 到目前为止呢，我们只是说，保证，每次写完一个模块，测试一下
-        // 我们是保证每个模块测试都是可以通过的
-        // 但是呢，还暂时不能保证现在之前所有的模块都是可以跑通的
+    }
 
-        // 特别提醒一下，在最后一个模块写完以后
-        // 我呢，会对整个程序，每个模块都进行一下测试，会把程序调节到所有模块依次执行，全部可以跑通
 
-        // 我们之前第一个和第三个模块，都写了一些解决数据倾斜的解决方案，以及代码
-        // 那些少量的解决数据倾斜问题的代码，咱们其实一直都没有测试过
-        // 不敢保证那些代码是可以跑通的
-        // 所以说呢，在课程录制结束之后，对那些数据倾斜的代码，我也会测一下，让每种解决方案的代码
-        // 都可以跑通
+
+    /**
+     * 计算广告点击流量实时统计
+     * @param filteredAdRealTimeLogDStream
+     * @return
+     */
+    private static JavaPairDStream<String, Long> calculateRealTimeStat(
+            JavaPairDStream<String, String> filteredAdRealTimeLogDStream) {
+        // 业务逻辑一
+        // 广告点击流量实时统计
+
+
+        // date province city userid adid
+        // date_province_city_adid，作为key；1作为value
+        // 通过spark，直接统计出来全局的点击次数，在spark集群中保留一份；在mysql中，也保留一份
+        // 对原始数据进行map，映射成<date_province_city_adid,1>格式
+        // 然后对上述格式的数据，执行updateStateByKey算子
+        // spark streaming特有的一种算子，在spark集群内存中，维护一份key的全局状态
+        JavaPairDStream<String, Long> mappedDStream = filteredAdRealTimeLogDStream.mapToPair(
+
+                new PairFunction<Tuple2<String,String>, String, Long>() {
+
+                    private static final long serialVersionUID = 1L;
+
+                    @Override
+                    public Tuple2<String, Long> call(Tuple2<String, String> tuple)
+                            throws Exception {
+                        String log = tuple._2;
+                        String[] logSplited = log.split(" ");
+
+                        String timestamp = logSplited[0];
+                        Date date = new Date(Long.valueOf(timestamp));
+                        String datekey = DateUtils.formatDateKey(date);	// yyyyMMdd
+
+                        String province = logSplited[1];
+                        String city = logSplited[2];
+                        long adid = Long.valueOf(logSplited[4]);
+
+                        String key = datekey + "_" + province + "_" + city + "_" + adid;
+
+                        return new Tuple2<String, Long>(key, 1L);
+                    }
+
+                });
+
+        // 在这个dstream中，就相当于，有每个batch rdd累加的各个key（各天各省份各城市各广告的点击次数）
+        // 每次计算出最新的值，就在aggregatedDStream中的每个batch rdd中反应出来
+        JavaPairDStream<String, Long> aggregatedDStream = mappedDStream.updateStateByKey(
+
+                new Function2<List<Long>, Optional<Long>, Optional<Long>>() {
+
+                    private static final long serialVersionUID = 1L;
+
+                    @Override
+                    public Optional<Long> call(List<Long> values, Optional<Long> optional)
+                            throws Exception {
+                        // 举例来说
+                        // 对于每个key，都会调用一次这个方法
+                        // 比如key是<20151201_Jiangsu_Nanjing_10001,1>，就会来调用一次这个方法7
+                        // 10个
+
+                        // values，(1,1,1,1,1,1,1,1,1,1)
+
+                        // 首先根据optional判断，之前这个key，是否有对应的状态
+                        long clickCount = 0L;
+
+                        // 如果说，之前是存在这个状态的，那么就以之前的状态作为起点，进行值的累加
+                        if(optional.isPresent()) {
+                            clickCount = optional.get();
+                        }
+
+                        // values，代表了，batch rdd中，每个key对应的所有的值
+                        for(Long value : values) {
+                            clickCount += value;
+                        }
+
+                        return Optional.of(clickCount);
+                    }
+
+                });
+
+        // 将计算出来的最新结果，同步一份到mysql中，以便于j2ee系统使用
+        aggregatedDStream.foreachRDD(new Function<JavaPairRDD<String,Long>, Void>() {
+
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Void call(JavaPairRDD<String, Long> rdd) throws Exception {
+
+                rdd.foreachPartition(new VoidFunction<Iterator<Tuple2<String,Long>>>() {
+
+                    private static final long serialVersionUID = 1L;
+
+                    @Override
+                    public void call(Iterator<Tuple2<String, Long>> iterator)
+                            throws Exception {
+                        List<AdStat> adStats = new ArrayList<AdStat>();
+
+                        while(iterator.hasNext()) {
+                            Tuple2<String, Long> tuple = iterator.next();
+
+                            String[] keySplited = tuple._1.split("_");
+                            String date = keySplited[0];
+                            String province = keySplited[1];
+                            String city = keySplited[2];
+                            long adid = Long.valueOf(keySplited[3]);
+
+                            long clickCount = tuple._2;
+
+                            AdStat adStat = new AdStat();
+                            adStat.setDate(date);
+                            adStat.setProvince(province);
+                            adStat.setCity(city);
+                            adStat.setAdid(adid);
+                            adStat.setClickCount(clickCount);
+
+                            adStats.add(adStat);
+                        }
+
+                        IAdStatDAO adStatDAO = DAOFactory.getAdStatDAO();
+                        adStatDAO.updateBatch(adStats);
+                    }
+
+                });
+
+                return null;
+            }
+
+        });
+
+        return aggregatedDStream;
     }
 }

@@ -31,7 +31,7 @@ import java.util.Map;
 /**
  * 各区域top3热门商品统计Spark作业
  */
-public class AreaTop3ProducrSpark {
+public class AreaTop3ProductSpark {
 
     public static void main(String[] args) {
         // 创建SparkConf

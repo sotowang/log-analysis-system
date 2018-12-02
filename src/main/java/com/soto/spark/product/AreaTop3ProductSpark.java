@@ -3,8 +3,10 @@ package com.soto.spark.product;
 import com.alibaba.fastjson.JSONObject;
 import com.soto.conf.ConfigurationManager;
 import com.soto.constant.Constants;
+import com.soto.dao.IAreaTop3ProductDAO;
 import com.soto.dao.ITaskDAO;
 import com.soto.dao.factory.DAOFactory;
+import com.soto.domain.AreaTop3Product;
 import com.soto.domain.Task;
 import com.soto.util.ParamUtils;
 import org.apache.spark.SparkConf;
@@ -37,25 +39,37 @@ public class AreaTop3ProductSpark {
         // 创建SparkConf
         SparkConf conf = new SparkConf()
                 .setAppName("AreaTop3ProductSpark")
-                .setMaster("local");
+                .setMaster("local[2]");
 //        SparkUtils.setMaster(conf);
 
         // 构建Spark上下文
         JavaSparkContext sc = new JavaSparkContext(conf);
 //        SQLContext sqlContext = SparkUtils.getSQLContext(sc.sc());
-        HiveContext sqlContext = new HiveContext(sc.sc());
+        HiveContext hiveContext = new HiveContext(sc.sc());
+        SQLContext sqlContext = new SQLContext(sc.sc());
 
 
         // 注册自定义函数
-        sqlContext.udf().register("concat_long_string",
+//        sqlContext.udf().register("concat_long_string",
+//                new ConcatLongStringUDF(), DataTypes.StringType);
+////        sqlContext.udf().register("get_json_object",
+////                new GetJsonObjectUDF(), DataTypes.StringType);
+//        sqlContext.udf().register("random_prefix",
+//                new RandomPrefixUDF(), DataTypes.StringType);
+//        sqlContext.udf().register("remove_random_prefix",
+//                new RemoveRandomPrefixUDF(), DataTypes.StringType);
+//        sqlContext.udf().register("group_concat_distinct",
+//                new GroupConcatDistinctUDAF());
+
+                hiveContext.udf().register("concat_long_string",
                 new ConcatLongStringUDF(), DataTypes.StringType);
-//        sqlContext.udf().register("get_json_object",
+//        hiveContext.udf().register("get_json_object",
 //                new GetJsonObjectUDF(), DataTypes.StringType);
-        sqlContext.udf().register("random_prefix",
+        hiveContext.udf().register("random_prefix",
                 new RandomPrefixUDF(), DataTypes.StringType);
-        sqlContext.udf().register("remove_random_prefix",
+        hiveContext.udf().register("remove_random_prefix",
                 new RemoveRandomPrefixUDF(), DataTypes.StringType);
-        sqlContext.udf().register("group_concat_distinct",
+        hiveContext.udf().register("group_concat_distinct",
                 new GroupConcatDistinctUDAF());
 
 
@@ -69,7 +83,7 @@ public class AreaTop3ProductSpark {
 
         long taskid = ParamUtils.getTaskIdFromArgs(args,
                 Constants.SPARK_LOCAL_TASKID_PRODUCT);
-        Task task = taskDAO.findById(2);
+        Task task = taskDAO.findById(taskid);
 
         JSONObject taskParam = JSONObject.parseObject(task.getTaskParam());
         String startDate = ParamUtils.getParam(taskParam, Constants.PARAM_START_DATE);
@@ -78,28 +92,33 @@ public class AreaTop3ProductSpark {
 
         // 查询用户指定日期范围内的点击行为数据（city_id，在哪个城市发生的点击行为）
         // 技术点1：Hive数据源的使用
-        JavaPairRDD<Long,Row> cityid2clickActionRDD = getcityid2ClickActionRDDByDate(sqlContext, startDate, endDate);
+        JavaPairRDD<Long,Row> cityid2clickActionRDD = getcityid2ClickActionRDDByDate(hiveContext, startDate, endDate);
 
         // 从MySQL中查询城市信息
         // 技术点2：异构数据源之MySQL的使用
         JavaPairRDD<Long, Row> cityid2cityInfoRDD = getcityid2CityInfoRDD(sqlContext);
 
+        cityid2cityInfoRDD.count();
 
         // 生成点击商品基础信息临时表
         // 技术点3：将RDD转换为DataFrame，并注册临时表
-        generateTempClickProductBasicTable(sqlContext, cityid2clickActionRDD, cityid2cityInfoRDD);
+        generateTempClickProductBasicTable(hiveContext, cityid2clickActionRDD, cityid2cityInfoRDD);
 
 
         // 生成各区域各商品点击次数的临时表
-        generateTempAreaPrdocutClickCountTable(sqlContext);
+        generateTempAreaPrdocutClickCountTable(hiveContext);
 
         // 生成包含完整商品信息的各区域各商品点击次数的临时表
-        generateTempAreaFullProductClickCountTable(sqlContext);
+        generateTempAreaFullProductClickCountTable(hiveContext);
 
 
         // 使用开窗函数获取各个区域内点击次数排名前3的热门商品
-        JavaRDD<Row> areaTop3ProductRDD = getAreaTop3ProductRDD(sqlContext);
+        JavaRDD<Row> areaTop3ProductRDD = getAreaTop3ProductRDD(hiveContext);
         System.out.println("areaTop3ProductRDD: " + areaTop3ProductRDD.count());
+
+        List<Row> rows = areaTop3ProductRDD.collect();
+        System.out.println("rows: " + rows.size());
+        persistAreaTop3Product(taskid, rows);
 
 
         sc.close();
@@ -131,6 +150,8 @@ public class AreaTop3ProductSpark {
                         + "AND date <='" + endDate + "'";
         DataFrame clickActionDF = sqlContext.sql(sql);
 
+//        clickActionDF.show();
+
         JavaRDD<Row> clickActionRDD = clickActionDF.javaRDD();
 
         JavaPairRDD<Long, Row> cityid2clickActionRDD = clickActionRDD.mapToPair(
@@ -156,7 +177,7 @@ public class AreaTop3ProductSpark {
      * @param sqlContext
      * @return
      */
-    private static JavaPairRDD<Long, Row> getcityid2CityInfoRDD(HiveContext sqlContext) {
+    private static JavaPairRDD<Long, Row> getcityid2CityInfoRDD(SQLContext sqlContext) {
         // 构建MySQL连接配置信息（直接从配置文件中获取）
         String url = null;
         String user = null;
@@ -281,7 +302,7 @@ public class AreaTop3ProductSpark {
      * 生成各区域各商品点击次数临时表
      * @param sqlContext
      */
-    private static void generateTempAreaPrdocutClickCountTable(SQLContext sqlContext) {
+    private static void generateTempAreaPrdocutClickCountTable(HiveContext sqlContext) {
         // 按照area和product_id两个字段进行分组
         // 计算出各区域各商品的点击次数
         // 可以获取到每个area下的每个product_id的城市信息拼接起来的串
@@ -342,7 +363,7 @@ public class AreaTop3ProductSpark {
      * @param sqlContext
      * @return
      */
-    private static JavaRDD<Row> getAreaTop3ProductRDD(SQLContext sqlContext) {
+    private static JavaRDD<Row> getAreaTop3ProductRDD(HiveContext sqlContext) {
 
         // 技术点：开窗函数
 
@@ -488,5 +509,29 @@ public class AreaTop3ProductSpark {
 
         df.registerTempTable("tmp_area_fullprod_click_count");
 
+    }
+
+    /**
+     * 将计算出来的各区域top3热门商品写入MySQL中
+     * @param rows
+     */
+    private static void persistAreaTop3Product(long taskid, List<Row> rows) {
+        List<AreaTop3Product> areaTop3Products = new ArrayList<AreaTop3Product>();
+
+        for(Row row : rows) {
+            AreaTop3Product areaTop3Product = new AreaTop3Product();
+            areaTop3Product.setTaskid(taskid);
+            areaTop3Product.setArea(row.getString(0));
+            areaTop3Product.setAreaLevel(row.getString(1));
+            areaTop3Product.setProductid(row.getLong(2));
+            areaTop3Product.setClickCount(Long.valueOf(String.valueOf(row.get(3))));
+            areaTop3Product.setCityInfos(row.getString(4));
+            areaTop3Product.setProductName(row.getString(5));
+            areaTop3Product.setProductStatus(row.getString(6));
+            areaTop3Products.add(areaTop3Product);
+        }
+
+        IAreaTop3ProductDAO areTop3ProductDAO = DAOFactory.getAreaTop3ProductDAO();
+        areTop3ProductDAO.insertBatch(areaTop3Products);
     }
 }

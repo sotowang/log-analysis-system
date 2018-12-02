@@ -38,7 +38,8 @@ public class AdClickRealTimeSpark {
         // 构建Spark Streaming上下文
         SparkConf conf = new SparkConf()
                 .setMaster("local[2]")
-                .setAppName("AdClickRealTimeStatSpark");
+                .setAppName("AdClickRealTimeStatSpark")
+                ;
 //                .set("spark.streaming.receiver.writeAheadLog.enable", "true"); ;   //预写日志
 
 

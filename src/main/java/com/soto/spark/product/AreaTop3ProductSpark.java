@@ -7,7 +7,6 @@ import com.soto.dao.ITaskDAO;
 import com.soto.dao.factory.DAOFactory;
 import com.soto.domain.Task;
 import com.soto.util.ParamUtils;
-import com.soto.util.SparkUtils;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -18,6 +17,7 @@ import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.SQLContext;
+import org.apache.spark.sql.hive.HiveContext;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
@@ -36,12 +36,15 @@ public class AreaTop3ProductSpark {
     public static void main(String[] args) {
         // 创建SparkConf
         SparkConf conf = new SparkConf()
-                .setAppName("AreaTop3ProductSpark");
-        SparkUtils.setMaster(conf);
+                .setAppName("AreaTop3ProductSpark")
+                .setMaster("local");
+//        SparkUtils.setMaster(conf);
 
         // 构建Spark上下文
         JavaSparkContext sc = new JavaSparkContext(conf);
-        SQLContext sqlContext = SparkUtils.getSQLContext(sc.sc());
+//        SQLContext sqlContext = SparkUtils.getSQLContext(sc.sc());
+        HiveContext sqlContext = new HiveContext(sc.sc());
+
 
         // 注册自定义函数
         sqlContext.udf().register("concat_long_string",
@@ -57,7 +60,8 @@ public class AreaTop3ProductSpark {
 
 
         // 准备模拟数据
-        SparkUtils.mockData(sc, sqlContext);
+//        SparkUtils.mockData(sc, sqlContext);
+
 
 
         // 获取命令行传入的taskid，查询对应的任务参数
@@ -65,7 +69,7 @@ public class AreaTop3ProductSpark {
 
         long taskid = ParamUtils.getTaskIdFromArgs(args,
                 Constants.SPARK_LOCAL_TASKID_PRODUCT);
-        Task task = taskDAO.findById(taskid);
+        Task task = taskDAO.findById(2);
 
         JSONObject taskParam = JSONObject.parseObject(task.getTaskParam());
         String startDate = ParamUtils.getParam(taskParam, Constants.PARAM_START_DATE);
@@ -112,7 +116,7 @@ public class AreaTop3ProductSpark {
      * @param endDate    截止日期
      * @return
      */
-    private static JavaPairRDD<Long, Row> getcityid2ClickActionRDDByDate(SQLContext sqlContext, String startDate, String endDate) {
+    private static JavaPairRDD<Long, Row> getcityid2ClickActionRDDByDate(HiveContext sqlContext, String startDate, String endDate) {
 
         // 从user_visit_action中，查询用户访问行为数据
         // 第一个限定：click_product_id，限定为不为空的访问行为，那么就代表着点击行为
@@ -152,7 +156,7 @@ public class AreaTop3ProductSpark {
      * @param sqlContext
      * @return
      */
-    private static JavaPairRDD<Long, Row> getcityid2CityInfoRDD(SQLContext sqlContext) {
+    private static JavaPairRDD<Long, Row> getcityid2CityInfoRDD(HiveContext sqlContext) {
         // 构建MySQL连接配置信息（直接从配置文件中获取）
         String url = null;
         String user = null;
@@ -209,7 +213,7 @@ public class AreaTop3ProductSpark {
      * @param cityid2cityInfoRDD
      */
     private static void generateTempClickProductBasicTable(
-            SQLContext sqlContext,
+            HiveContext sqlContext,
             JavaPairRDD<Long, Row> cityid2clickActionRDD,
             JavaPairRDD<Long, Row> cityid2cityInfoRDD) {
 
@@ -378,7 +382,7 @@ public class AreaTop3ProductSpark {
                         + "city_infos,"
                         + "product_name,"
                         + "product_status,"
-                        + "row_number() OVER (PARTITION BY area ORDER BY click_count DESC) rank "
+                        + "row_number() OVER(PARTITION BY area ORDER BY click_count DESC) rank "
                         + "FROM tmp_area_fullprod_click_count "
                         + ") t "
                         + "WHERE rank<=3";

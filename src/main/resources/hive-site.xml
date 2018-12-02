@@ -1,0 +1,120 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<configuration>
+    
+    <property>
+
+     <name>hive.metastore.warehouse.dir</name>
+
+     <value>hdfs://sotowang-pc:9000/user/hive/warehouse</value>
+
+     <description>hive.metastore.warehouse.dir</description>
+
+   </property>
+
+    <property>
+        <name>hive.metastore.local</name>
+        <value>false</value>
+    </property>
+    
+    <property>
+        <name>javax.jdo.option.ConnectionURL</name>
+        <value>jdbc:mysql://sotowang-pc:3306/hive?createDatabaseIfNotExist=true</value>
+    </property>
+
+    <property>
+        <name>javax.jdo.option.ConnectionDriverName</name>
+        <value>com.mysql.jdbc.Driver</value>
+    </property>
+
+    <property>
+        <name>javax.jdo.option.ConnectionUserName</name>
+        <value>root</value>
+    </property>
+
+    <property>
+        <name>javax.jdo.option.ConnectionPassword</name>
+        <value>123456</value>
+    </property>
+
+    <property>
+	<name>hive.hwi.listen.host</name>
+	<value>0.0.0.0</value>
+	</property>
+    <property>
+	<name>hive.hwi.listen.port</name>
+	<value>9999</value>
+    </property>
+    <property>
+	<name>hive.hwi.war.file</name>
+	<value>lib/hive-hwi-1.1.0.war</value>                                                                             
+    </property>
+    <property>
+	<name>hive.aux.jars.path</name>
+	<value>$HIVE_HOME/auxlib/</value>                                                                             
+    </property>
+
+    <property>
+	<name>hive.limit.optimize.enable</name>
+	<value>true</value>                                                                             
+    </property>
+
+    <property>
+	<name>hive.limit.optimize.limit.file</name>
+	<value>10</value>                                                                             
+    </property>
+    <property>
+	<name>hive.limit.row.max.size</name>
+	<value>100000</value>                                                                             
+    </property>
+
+    <property>
+	<name>hive.limit.optimize.fetch.max</name>
+	<value>50000</value>                                                                             
+    </property>
+
+    <property>
+	<name>hive.exec.mode.local.auto</name>
+	<value>true</value>                                                                             
+    </property>
+
+    <property>
+	<name>hive.exec.mode.local.auto.inputbytes.max</name>
+	<value>134217728</value>                                                                             
+    </property>
+
+    <property>
+	<name>hive.exec.mode.local.auto.input.files.max</name>
+	<value>4</value>                                                                             
+    </property>
+
+
+    <property>
+	<name>hive.exec.parallel</name>
+	<value>false</value>                                                                             
+    </property>
+
+    <property>
+	<name>hive.exec.parallel.thread.number</name>
+	<value>8</value>                                                                             
+    </property>
+
+
+    <property>
+	<name>hive.map.aggr</name>
+	<value>true</value>                                                                             
+    </property>
+
+    <property>
+	<name>hive.optimize.skewjoin</name>
+	<value>true</value>                                                                             
+    </property>
+
+    <property>
+	<name>hive.groupby.skewindata</name>
+	<value>true</value>                                                                             
+    </property>
+
+
+
+</configuration>

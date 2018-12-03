@@ -12,12 +12,14 @@ import com.soto.util.DateUtils;
 import kafka.serializer.StringDecoder;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.Function2;
 import org.apache.spark.api.java.function.PairFunction;
 import org.apache.spark.api.java.function.VoidFunction;
 import org.apache.spark.streaming.Durations;
+import org.apache.spark.streaming.api.java.JavaDStream;
 import org.apache.spark.streaming.api.java.JavaPairDStream;
 import org.apache.spark.streaming.api.java.JavaPairInputDStream;
 import org.apache.spark.streaming.api.java.JavaStreamingContext;
@@ -221,6 +223,61 @@ public class sparkstreaming_kafkaTest {
                 }
         );
 
-        return day_user_ad_countRDD;
+        JavaPairDStream<String, Long> blackListDStream = day_user_ad_countRDD.filter(
+                new Function<Tuple2<String, Long>, Boolean>() {
+                    private static final long serialVersionUID = 1L;
+
+                    @Override
+                    public Boolean call(Tuple2<String, Long> tuple) throws Exception {
+                        String log = tuple._1;
+                        String[] split = log.split("_");
+
+                        String date_ = split[0];
+                        String date = date_.substring(0, 4) + "-" + date_.substring(4, 6) + "-" + date_.substring(6, 8);
+                        long userid = Long.valueOf(split[1]);
+                        long adid = Long.valueOf(split[2]);
+
+                        IAdUserClickCountDAO adUserClickCountDAO = DAOFactory.getAdUserClickCountDAO();
+                        int count = adUserClickCountDAO.findClickCountByMultiKey(date, userid, adid);
+
+                        if (count > 5) {
+                            return true;
+                        }else
+                            return false;
+
+                    }
+                }
+        );
+
+        //对userid进行去重
+        JavaDStream<Long> blackListUseridDStream = blackListDStream.map(
+                new Function<Tuple2<String, Long>, Long>() {
+                    private static final long serialVersionUID = 1L;
+
+                    @Override
+                    public Long call(Tuple2<String, Long> tuple) throws Exception {
+                        String log = tuple._1;
+                        Long userid = Long.valueOf(log.split("_")[3]);
+                        return userid;
+                    }
+
+                }
+        );
+
+        JavaDStream<Long> distinctUserid = blackListUseridDStream.transform(
+                new Function<JavaRDD<Long>, JavaRDD<Long>>() {
+                    private static final long serialVersionUID = 1L;
+
+                    @Override
+                    public JavaRDD<Long> call(JavaRDD<Long> rdd) throws Exception {
+                        return rdd.distinct();
+                    }
+                }
+        );
+
+        //将黑名单写入mysql
+
+
+        return blackListDStream;
     }
 }

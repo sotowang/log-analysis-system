@@ -335,18 +335,6 @@ public class AdClickRealTimeSpark {
             }
         });
 
-        // 现在在mysql里面，已经有了累计的每天各用户对各广告的点击量
-        // 遍历每个batch中的所有记录，对每条记录都要去查询一下，这一天这个用户对这个广告的累计点击量是多少
-        // 从mysql中查询
-        // 查询出来的结果，如果是100，如果你发现某个用户某天对某个广告的点击量已经大于等于100了
-        // 那么就判定这个用户就是黑名单用户，就写入mysql的表中，持久化
-
-        // 对batch中的数据，去查询mysql中的点击次数，使用哪个dstream呢？
-        // dailyUserAdClickCountDStream
-        // 为什么用这个batch？因为这个batch是聚合过的数据，已经按照yyyyMMdd_userid_adid进行过聚合了
-        // 比如原始数据可能是一个batch有一万条，聚合过后可能只有五千条
-        // 所以选用这个聚合后的dstream，既可以满足咱们的需求，而且呢，还可以尽量减少要处理的数据量
-        // 一石二鸟，一举两得
 
         JavaPairDStream<String, Long> blacklistDStream = dailyUserAdClickCountDStream.filter(
 
@@ -361,8 +349,11 @@ public class AdClickRealTimeSpark {
                         String[] keySplited = key.split("_");
 
                         // yyyyMMdd -> yyyy-MM-dd
-                        String date = DateUtils.formatDate(DateUtils.parseDateKey(keySplited[0]));
+//                        String date = DateUtils.formatDate(DateUtils.parseDateKey(keySplited[0]));
                         long userid = Long.valueOf(keySplited[1]);
+                        String date_ = keySplited[0];
+                        String date = date_.substring(0, 4) + "-" + date_.substring(4, 6) + "-" + date_.substring(6, 8);
+
                         long adid = Long.valueOf(keySplited[2]);
 
                         // 从mysql中查询指定日期指定用户对指定广告的点击量
@@ -382,23 +373,10 @@ public class AdClickRealTimeSpark {
 
                 });
 
-        // blacklistDStream
-        // 里面的每个batch，其实就是都是过滤出来的已经在某天对某个广告点击量超过100的用户
-        // 遍历这个dstream中的每个rdd，然后将黑名单用户增加到mysql中
-        // 这里一旦增加以后，在整个这段程序的前面，会加上根据黑名单动态过滤用户的逻辑
-        // 我们可以认为，一旦用户被拉入黑名单之后，以后就不会再出现在这里了
-        // 所以直接插入mysql即可
 
-        // 这里有一个小小的问题？
-        // blacklistDStream中，可能有userid是重复的，如果直接这样插入的话
-        // 那么是不是会发生，插入重复的黑明单用户
-        // 我们在插入前要进行去重
-        // yyyyMMdd_userid_adid
-        // 20151220_10001_10002 100
-        // 20151220_10001_10003 100
-        // 10001这个userid就重复了
-
-        // 实际上，是要通过对dstream执行操作，对其中的rdd中的userid进行全局的去重
+        // blacklistDStream中，可能有userid是重复的
+        // 在插入前要进行去重
+       //要通过对dstream执行操作，对其中的rdd中的userid进行全局的去重
         JavaDStream<Long> blacklistUseridDStream = blacklistDStream.map(
 
                 new Function<Tuple2<String,Long>, Long>() {

@@ -39,6 +39,7 @@ public class AdClickRealTimeSpark {
         SparkConf conf = new SparkConf()
                 .setMaster("local[2]")
                 .setAppName("AdClickRealTimeStatSpark")
+                .setMaster("local[2]")
                 ;
 //                .set("spark.streaming.receiver.writeAheadLog.enable", "true"); ;   //预写日志
 
@@ -309,7 +310,7 @@ public class AdClickRealTimeSpark {
                             Tuple2<String, Long> tuple = iterator.next();
 
                             String[] keySplited = tuple._1.split("_");
-                            String date = DateUtils.formatDate(DateUtils.parseDateKey(keySplited[0]));
+                            String date = DateUtils.formatDate(DateUtils.parseDateKey(keySplited[0])).toString();
                             // yyyy-MM-dd
                             long userid = Long.valueOf(keySplited[1]);
                             long adid = Long.valueOf(keySplited[2]);
@@ -709,7 +710,7 @@ public class AdClickRealTimeSpark {
                                         long adid = Long.valueOf(keySplited[2]);
                                         long clickCount = tuple._2;
 
-                                        String date = DateUtils.formatDate(DateUtils.parseDateKey(datekey));
+                                        String date = DateUtils.formatDate(DateUtils.parseDateKey(datekey)).toString();
 
                                         return RowFactory.create(date, province, adid, clickCount);
                                     }

@@ -1,7 +1,7 @@
 ### 移动计算大作业
 * 针对移动计算中任意一个场景，开发一套系统
 
-```
+```markdown
 1. 给出应用场景的详细描述
 2. 使用关键技术 “上下文感知”
 3. 给出关键技术的设计思想的实现方式
@@ -10,7 +10,7 @@
 
 #### 本项目以spark为基础进行开发
 ##### 1. 公共组件
-```$xslt
+```html
 * 配置管理组件
 * JDBC辅助组件
 * 工具类
@@ -22,30 +22,30 @@
 
 ##### 2. 第一个模块：用户访问session分析模块
 * 基础
-```$xslt
+```html
 session粒度聚合，按筛选条件进行过滤
 ```
 * session聚合统计
 
-```$xslt
+```html
 统计出访问时长和访问步长，各个区间范围的session数量，占总session数量的比例
 ```
 
 * session随机抽取
 
-```$xslt
+```html
 按时间比例，随机抽取100个session
 ```
 
 * top10 热门品类
 
-```$xslt
+```html
 获取通过筛选投机倒把的session，点击，下单和支付次数最多的10个品类
 ```
 
 * top10 活跃session
 
-```$xslt
+```html
 获取top10 热门品类中，每个品类点击次数最多的10个session
 ```
 ##### 3. 第二个模块：页面单跳转化率
@@ -91,7 +91,7 @@ session粒度聚合，按筛选条件进行过滤
 
 executor, cpu per executor, memory per executor, driver memory
 
-```$xslt
+```bash
 spark-submit \
 --class com.soto.....  \
 --num-executors 3 \  
@@ -103,7 +103,7 @@ spark-submit \
 
 * Kryo 序列化
 
-```$xslt
+```html
 1. 算子函数中用到了外部变量，会序列化，会使用Kyro
 2. 使用了序列化的持久化级别时，在将每个RDD partition序列化成一个在的字节数组时，就会使用Kryo进一步优化序列化的效率和性能
 3. stage中task之间 执行shuffle时，文件通过网络传输，会使用序列化
@@ -122,7 +122,7 @@ spark-submit \
 ##### 8. 生产环境测试
 * Hive表测试
 
-```$xslt
+```bash
 hive> create table user_visit_action( 
         date string,    
         user_id bigint, 
@@ -165,7 +165,35 @@ hive> load data local inpath '/home/sotowang/user/aur/ide/idea/idea-IU-182.3684.
 
 ```
 
+* 启动zookeeper
 
+```bash
+zookeeper-server-start.sh $KAFKA_HOME/config/zookeeper.properties
+```
 
+*启动kafka
+
+```bash
+kafka-server-start.sh  -daemon $KAFKA_HOME/config/server.properties
+```
+
+* 创建topic
+
+```bash
+kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic AdRealTimeLog
+
+```
+
+* 发送消息
+
+```bash
+kafka-console-producer.sh --broker-list localhost:9092 --topic AdRealTimeLog
+```
+
+*消费消息
+
+```bash
+kafka-console-consumer.sh --zookeeper localhost:2181 --topic AdRealTimeLog
+```
 
 

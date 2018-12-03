@@ -39,7 +39,6 @@ public class AdClickRealTimeSpark {
         SparkConf conf = new SparkConf()
                 .setMaster("local[2]")
                 .setAppName("AdClickRealTimeStatSpark")
-                .setMaster("local[2]")
                 ;
 //                .set("spark.streaming.receiver.writeAheadLog.enable", "true"); ;   //预写日志
 
@@ -137,7 +136,6 @@ public class AdClickRealTimeSpark {
 
                     private static final long serialVersionUID = 1L;
 
-                    //                    @SuppressWarnings("resource")
                     @Override
                     public JavaPairRDD<String, String> call(
                             JavaPairRDD<String, String> rdd) throws Exception {
@@ -156,7 +154,8 @@ public class AdClickRealTimeSpark {
                         JavaPairRDD<Long, Boolean> blacklistRDD = sc.parallelizePairs(tuples);
 
                         // 将原始数据rdd映射成<userid, tuple2<string, string>>
-                        JavaPairRDD<Long, Tuple2<String, String>> mappedRDD = rdd.mapToPair(new PairFunction<Tuple2<String,String>, Long, Tuple2<String, String>>() {
+                        JavaPairRDD<Long, Tuple2<String, String>> mappedRDD = rdd.mapToPair(
+                                new PairFunction<Tuple2<String,String>, Long, Tuple2<String, String>>() {
 
                             private static final long serialVersionUID = 1L;
 
@@ -283,9 +282,7 @@ public class AdClickRealTimeSpark {
                 });
 //				}, 1000);
 
-        // 到这里为止，获取到了什么数据呢？
-        // dailyUserAdClickCountDStream DStream
-        // 源源不断的，每个5s的batch中，当天每个用户对每支广告的点击次数
+
         // <yyyyMMdd_userid_adid, clickCount>
         dailyUserAdClickCountDStream.foreachRDD(new Function<JavaPairRDD<String,Long>, Void>() {
 
@@ -310,7 +307,11 @@ public class AdClickRealTimeSpark {
                             Tuple2<String, Long> tuple = iterator.next();
 
                             String[] keySplited = tuple._1.split("_");
-                            String date = DateUtils.formatDate(DateUtils.parseDateKey(keySplited[0])).toString();
+//                            String date = DateUtils.formatDate(DateUtils.parseDateKey(keySplited[0])).toString();
+                            String date_ = keySplited[0];
+
+                            String date = date_.substring(0, 4) + "-" + date_.substring(4, 6) + "-" + date_.substring(6, 8);
+
                             // yyyy-MM-dd
                             long userid = Long.valueOf(keySplited[1]);
                             long adid = Long.valueOf(keySplited[2]);
@@ -388,7 +389,7 @@ public class AdClickRealTimeSpark {
         // 我们可以认为，一旦用户被拉入黑名单之后，以后就不会再出现在这里了
         // 所以直接插入mysql即可
 
-        // 我们有没有发现这里有一个小小的问题？
+        // 这里有一个小小的问题？
         // blacklistDStream中，可能有userid是重复的，如果直接这样插入的话
         // 那么是不是会发生，插入重复的黑明单用户
         // 我们在插入前要进行去重
@@ -457,36 +458,6 @@ public class AdClickRealTimeSpark {
                         IAdBlacklistDAO adBlacklistDAO = DAOFactory.getAdBlacklistDAO();
                         adBlacklistDAO.insertBatch(adBlacklists);
 
-                        // 到此为止，我们其实已经实现了动态黑名单了
-
-                        // 1、计算出每个batch中的每天每个用户对每个广告的点击量，并持久化到mysql中
-
-                        // 2、依据上述计算出来的数据，对每个batch中的按date、userid、adid聚合的数据
-                        // 都要遍历一遍，查询一下，对应的累计的点击次数，如果超过了100，那么就认定为黑名单
-                        // 然后对黑名单用户进行去重，去重后，将黑名单用户，持久化插入到mysql中
-                        // 所以说mysql中的ad_blacklist表中的黑名单用户，就是动态地实时地增长的
-                        // 所以说，mysql中的ad_blacklist表，就可以认为是一张动态黑名单
-
-                        // 3、基于上述计算出来的动态黑名单，在最一开始，就对每个batch中的点击行为
-                        // 根据动态黑名单进行过滤
-                        // 把黑名单中的用户的点击行为，直接过滤掉
-
-                        // 动态黑名单机制，就完成了
-
-                        // 第一套spark课程，spark streaming阶段，有个小案例，也是黑名单
-                        // 但是那只是从实际项目中抽取出来的案例而已
-                        // 作为技术的学习，（案例），包装（基于你公司的一些业务），项目，找工作
-                        // 锻炼和实战自己spark技术，没问题的
-                        // 但是，那还不是真真正正的项目
-
-                        // 第一个spark课程：scala、spark core、源码、调优、spark sql、spark streaming
-                        // 总共加起来（scala+spark）的案例，将近上百个
-                        // 搞通透，精通以后，1~2年spark相关经验，没问题
-
-                        // 第二个spark课程（项目）：4个模块，涵盖spark core、spark sql、spark streaming
-                        // 企业级性能调优、troubleshooting、数据倾斜解决方案、实际的数据项目开发流程
-                        // 大数据项目架构
-                        // 加上第一套课程，2~3年的spark相关经验，没问题
 
                     }
 

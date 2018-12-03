@@ -168,13 +168,13 @@ hive> load data local inpath '/home/sotowang/user/aur/ide/idea/idea-IU-182.3684.
 * 启动zookeeper
 
 ```bash
-zookeeper-server-start.sh $KAFKA_HOME/config/zookeeper.properties
+nohup zookeeper-server-start.sh $KAFKA_HOME/config/zookeeper.properties &
 ```
 
 *启动kafka
 
 ```bash
-kafka-server-start.sh  -daemon $KAFKA_HOME/config/server.properties
+nohup kafka-server-start.sh  -daemon $KAFKA_HOME/config/server.properties &
 ```
 
 * 创建topic

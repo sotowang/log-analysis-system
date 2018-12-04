@@ -1,4 +1,4 @@
-package com.soto.dao.impl;
+package com.soto;
 
 import com.soto.dao.IAdUserClickCountDAO;
 import com.soto.domain.AdUserClickCount;
@@ -9,11 +9,8 @@ import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * 用户广告点击量DAO实现类
- *
- */
-public class AdUserClickCountDAOImpl implements IAdUserClickCountDAO {
+public class AdUserClickCountDAOImplTest implements IAdUserClickCountDAO {
+
     @Override
     public void updateBatch(List<AdUserClickCount> adUserClickCounts) {
 
@@ -23,37 +20,36 @@ public class AdUserClickCountDAOImpl implements IAdUserClickCountDAO {
         List<AdUserClickCount> insertAdUserClickCounts = new ArrayList<AdUserClickCount>();
         List<AdUserClickCount> updateAdUserClickCounts = new ArrayList<AdUserClickCount>();
 
-
         String selectSQL = "SELECT count(*) FROM ad_user_click_count "
                 + "WHERE date=? AND user_id=? AND ad_id=? ";
         Object[] selectParams = null;
 
-        for(AdUserClickCount adUserClickCount : adUserClickCounts) {
-            final AdUserClickCountQueryResult queryResult = new AdUserClickCountQueryResult();
+        for (AdUserClickCount adUserClickCount : adUserClickCounts) {
 
-//            queryResult.setCount(0);
+            final AdUserClickCountQueryResult adUserClickCountQueryResult = new AdUserClickCountQueryResult();
 
-            selectParams = new Object[]{adUserClickCount.getDate(),
-                    adUserClickCount.getUserid(), adUserClickCount.getAdid()};
+            String date = adUserClickCount.getDate();
+            long user_id = adUserClickCount.getUserid();
+            long ad_id = adUserClickCount.getAdid();
+
+            selectParams = new Object[]{date, user_id, ad_id};
 
             jdbcHelper.executeQuery(selectSQL, selectParams, new JDBCHelper.QueryCallback() {
-
                 @Override
                 public void process(ResultSet rs) throws Exception {
-                    if(rs.next()) {
-                        int count = rs.getInt(1);
-                        queryResult.setCount(count);
+                    if (rs.next()) {
+                        adUserClickCountQueryResult.setCount(rs.getInt(1));
                     }
                 }
             });
 
-            int count = queryResult.getCount();
-
-            if(count > 0) {
+            int count = adUserClickCountQueryResult.getCount();
+            if (count > 0) {
                 updateAdUserClickCounts.add(adUserClickCount);
             } else {
                 insertAdUserClickCounts.add(adUserClickCount);
             }
+
         }
 
         // 执行批量插入
@@ -69,7 +65,6 @@ public class AdUserClickCountDAOImpl implements IAdUserClickCountDAO {
         }
 
         jdbcHelper.executeBatch(insertSQL, insertParamsList);
-
 
 
         String updateSQL = "UPDATE ad_user_click_count SET click_count=click_count+? "
@@ -88,14 +83,8 @@ public class AdUserClickCountDAOImpl implements IAdUserClickCountDAO {
 
     }
 
-    /**
-     * 根据多个key查询用户广告点击量
-     * @param date 日期
-     * @param userid 用户id
-     * @param adid 广告id
-     * @return
-     */
-    public int findClickCountByMultiKey(String date, long userid, long adid) {
+    @Override
+    public int findClickCountByMultiKey(String date, long userid, final long adid) {
         String sql = "SELECT click_count "
                 + "FROM ad_user_click_count "
                 + "WHERE date=? "
@@ -104,22 +93,21 @@ public class AdUserClickCountDAOImpl implements IAdUserClickCountDAO {
 
         Object[] params = new Object[]{date, userid, adid};
 
-        final AdUserClickCountQueryResult queryResult = new AdUserClickCountQueryResult();
+        final AdUserClickCountQueryResult adUserClickCountQueryResult = new AdUserClickCountQueryResult();
 
         JDBCHelper jdbcHelper = JDBCHelper.getInstance();
         jdbcHelper.executeQuery(sql, params, new JDBCHelper.QueryCallback() {
-
             @Override
             public void process(ResultSet rs) throws Exception {
-                if(rs.next()) {
-                    int clickCount = rs.getInt(1);
-                    queryResult.setClickCount(clickCount);
+                if (rs.next()) {
+                    adUserClickCountQueryResult.setClickCount(rs.getInt(1));
                 }
             }
         });
-
-        int clickCount = queryResult.getClickCount();
+        int clickCount = adUserClickCountQueryResult.getClickCount();
 
         return clickCount;
     }
+
+
 }

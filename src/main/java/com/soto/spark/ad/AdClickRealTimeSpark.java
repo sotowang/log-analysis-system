@@ -96,7 +96,7 @@ public class AdClickRealTimeSpark {
         JavaPairDStream<String, String> filteredAdRealTimeLogDStream = filterByBlacklist(adRealTimeLogDStream);
 
         // 生成动态黑名单
-        generateDynamicBlacklist(filteredAdRealTimeLogDStream);
+        generateDynamicBlacklist(filteredAdRealTimeLogDStream).print();
 
 
         // 业务功能一：计算广告点击流量实时统计结果（yyyyMMdd_province_city_adid,clickCount）
@@ -227,230 +227,179 @@ public class AdClickRealTimeSpark {
     /**
      * 生成动态黑名单
      * @param filteredAdRealTimeLogDStream
+     * @return
      */
-    private static void generateDynamicBlacklist(
-            JavaPairDStream<String, String> filteredAdRealTimeLogDStream) {
-        // 一条一条的实时日志
-        // timestamp province city userid adid
-        // 某个时间点 某个省份 某个城市 某个用户 某个广告
+    private static JavaPairDStream<String, Long> generateDynamicBlacklist(JavaPairDStream<String, String> filteredAdRealTimeLogDStream) {
 
-        // 计算出每5个秒内的数据中，每天每个用户每个广告的点击量
-
-        // 通过对原始实时日志的处理
         // 将日志的格式处理成<yyyyMMdd_userid_adid, 1L>格式
-        JavaPairDStream<String, Long> dailyUserAdClickDStream = filteredAdRealTimeLogDStream.mapToPair(
-
-                new PairFunction<Tuple2<String,String>, String, Long>() {
-
-                    private static final long serialVersionUID = 1L;
-
+        JavaPairDStream<String, Long> yyyyMMdd_userid_adidRDD = filteredAdRealTimeLogDStream.mapToPair(
+                new PairFunction<Tuple2<String, String>, String, Long>() {
                     @Override
-                    public Tuple2<String, Long> call(Tuple2<String, String> tuple)
-                            throws Exception {
-                        // 从tuple中获取到每一条原始的实时日志
-                        String log = tuple._2;
-                        String[] logSplited = log.split(" ");
-
-                        // 提取出日期（yyyyMMdd）、userid、adid
-                        String timestamp = logSplited[0];
+                    public Tuple2<String, Long> call(Tuple2<String, String> tuple) throws Exception {
+                        String logs = tuple._2;
+                        String[] splited = logs.split(" ");
+                        long userid = Long.valueOf(splited[3]);
+                        String timestamp = splited[0];
                         Date date = new Date(Long.valueOf(timestamp));
-                        String datekey = DateUtils.formatDateKey(date);
+                        String dateKey = DateUtils.formatDateKey(date);
+                        String adid = splited[4];
 
-                        long userid = Long.valueOf(logSplited[3]);
-                        long adid = Long.valueOf(logSplited[4]);
-
-                        // 拼接key
-                        String key = datekey + "_" + userid + "_" + adid;
+                        String key = dateKey + "_" + userid + "_" + adid;
 
                         return new Tuple2<String, Long>(key, 1L);
                     }
-
-                });
+                }
+        );
 
         // 针对处理后的日志格式，执行reduceByKey算子即可
         // （每个batch中）每天每个用户对每个广告的点击量
-        JavaPairDStream<String, Long> dailyUserAdClickCountDStream = dailyUserAdClickDStream.reduceByKey(
-
+        JavaPairDStream<String,Long> day_user_ad_countRDD = yyyyMMdd_userid_adidRDD.reduceByKey(
                 new Function2<Long, Long, Long>() {
-
-                    private static final long serialVersionUID = 1L;
-
                     @Override
                     public Long call(Long v1, Long v2) throws Exception {
                         return v1 + v2;
                     }
-                });
-//				}, 1000);
+                }
+        );
 
-
-        // <yyyyMMdd_userid_adid, clickCount>
-        dailyUserAdClickCountDStream.foreachRDD(new Function<JavaPairRDD<String,Long>, Void>() {
-
-            private static final long serialVersionUID = 1L;
-
-            @Override
-            public Void call(JavaPairRDD<String, Long> rdd) throws Exception {
-
-                rdd.foreachPartition(new VoidFunction<Iterator<Tuple2<String,Long>>>() {
+        day_user_ad_countRDD.foreachRDD(
+                new Function<JavaPairRDD<String, Long>, Void>() {
 
                     private static final long serialVersionUID = 1L;
 
                     @Override
-                    public void call(Iterator<Tuple2<String, Long>> iterator) throws Exception {
-                        // 对每个分区的数据就去获取一次连接对象
-                        // 每次都是从连接池中获取，而不是每次都创建
-                        // 写数据库操作，性能已经提到最高了
+                    public Void call(JavaPairRDD<String, Long> rdd) throws Exception {
+                        rdd.foreachPartition(
+                                new VoidFunction<Iterator<Tuple2<String, Long>>>() {
+                                    private static final long serialVersionUID = 1L;
 
-                        List<AdUserClickCount> adUserClickCounts = new ArrayList<AdUserClickCount>();
+                                    @Override
+                                    public void call(Iterator<Tuple2<String, Long>> iterator) throws Exception {
+                                        List<AdUserClickCount> adUserClickCountList = new ArrayList<AdUserClickCount>();
 
-                        while(iterator.hasNext()) {
-                            Tuple2<String, Long> tuple = iterator.next();
+                                        while (iterator.hasNext()) {
+                                            Tuple2<String, Long> tuple = iterator.next();
+                                            String log = tuple._1;
+                                            long count = tuple._2;
+                                            String[] split = log.split("_");
+                                            String date_ = split[0];
+                                            String date = date_.substring(0, 4) + "-" + date_.substring(4, 6) + "-" + date_.substring(6, 8);
+                                            long userid = Long.valueOf(split[1]);
+                                            long adid = Long.valueOf(split[2]);
 
-                            String[] keySplited = tuple._1.split("_");
-//                            String date = DateUtils.formatDate(DateUtils.parseDateKey(keySplited[0])).toString();
-                            String date_ = keySplited[0];
+                                            AdUserClickCount adUserClickCount = new AdUserClickCount();
+                                            adUserClickCount.setAdid(adid);
+                                            adUserClickCount.setClickCount(count);
+                                            adUserClickCount.setUserid(userid);
+                                            adUserClickCount.setDate(date);
 
-                            String date = date_.substring(0, 4) + "-" + date_.substring(4, 6) + "-" + date_.substring(6, 8);
+                                            adUserClickCountList.add(adUserClickCount);
 
-                            // yyyy-MM-dd
-                            long userid = Long.valueOf(keySplited[1]);
-                            long adid = Long.valueOf(keySplited[2]);
-                            long clickCount = tuple._2;
+                                        }
 
-                            AdUserClickCount adUserClickCount = new AdUserClickCount();
-                            adUserClickCount.setDate(date);
-                            adUserClickCount.setUserid(userid);
-                            adUserClickCount.setAdid(adid);
-                            adUserClickCount.setClickCount(clickCount);
+                                        IAdUserClickCountDAO adUserClickCountDAO = DAOFactory.getAdUserClickCountDAO();
+                                        if (!adUserClickCountList.isEmpty()) {
+                                            adUserClickCountDAO.updateBatch(adUserClickCountList);
+                                        }
 
-                            adUserClickCounts.add(adUserClickCount);
-                        }
-
-                        IAdUserClickCountDAO adUserClickCountDAO = DAOFactory.getAdUserClickCountDAO();
-
-                        if (!adUserClickCounts.isEmpty()) {
-                            adUserClickCountDAO.updateBatch(adUserClickCounts);
-                        }
+                                    }
+                                }
+                        );
+                        return null;
                     }
-                });
+                }
+        );
 
-                return null;
-            }
-        });
-
-
-        JavaPairDStream<String, Long> blacklistDStream = dailyUserAdClickCountDStream.filter(
-
-                new Function<Tuple2<String,Long>, Boolean>() {
-
+        JavaPairDStream<String, Long> blackListDStream = day_user_ad_countRDD.filter(
+                new Function<Tuple2<String, Long>, Boolean>() {
                     private static final long serialVersionUID = 1L;
 
                     @Override
-                    public Boolean call(Tuple2<String, Long> tuple)
-                            throws Exception {
-                        String key = tuple._1;
-                        String[] keySplited = key.split("_");
+                    public Boolean call(Tuple2<String, Long> tuple) throws Exception {
+                        String log = tuple._1;
+                        String[] split = log.split("_");
 
-                        // yyyyMMdd -> yyyy-MM-dd
-//                        String date = DateUtils.formatDate(DateUtils.parseDateKey(keySplited[0]));
-                        long userid = Long.valueOf(keySplited[1]);
-                        String date_ = keySplited[0];
+                        String date_ = split[0];
                         String date = date_.substring(0, 4) + "-" + date_.substring(4, 6) + "-" + date_.substring(6, 8);
+                        long userid = Long.valueOf(split[1]);
+                        long adid = Long.valueOf(split[2]);
 
-                        long adid = Long.valueOf(keySplited[2]);
-
-                        // 从mysql中查询指定日期指定用户对指定广告的点击量
                         IAdUserClickCountDAO adUserClickCountDAO = DAOFactory.getAdUserClickCountDAO();
-                        int clickCount = adUserClickCountDAO.findClickCountByMultiKey(
-                                date, userid, adid);
+                        int count = adUserClickCountDAO.findClickCountByMultiKey(date, userid, adid);
 
-                        // 判断，如果点击量大于等于100就是黑名单用户
-                        // 那么就拉入黑名单，返回true
-                        if(clickCount > 2) {
+                        if (count > 1) {
                             return true;
-                        }
+                        }else
+                            return false;
 
-                        // 反之，如果点击量小于100的，那么就暂时不要管它了
-                        return false;
                     }
+                }
+        );
 
-                });
-
-
-        // blacklistDStream中，可能有userid是重复的
-        // 在插入前要进行去重
-       //要通过对dstream执行操作，对其中的rdd中的userid进行全局的去重
-        JavaDStream<Long> blacklistUseridDStream = blacklistDStream.map(
-
-                new Function<Tuple2<String,Long>, Long>() {
-
+        //对userid进行去重
+        JavaDStream<Long> blackListUseridDStream = blackListDStream.map(
+                new Function<Tuple2<String, Long>, Long>() {
                     private static final long serialVersionUID = 1L;
 
                     @Override
                     public Long call(Tuple2<String, Long> tuple) throws Exception {
-                        String key = tuple._1;
-                        String[] keySplited = key.split("_");
-                        Long userid = Long.valueOf(keySplited[1]);
+                        String log = tuple._1;
+                        Long userid = Long.valueOf(log.split("_")[1]);
                         return userid;
                     }
 
-                });
+                }
+        );
 
-        JavaDStream<Long> distinctBlacklistUseridDStream = blacklistUseridDStream.transform(
-
+        JavaDStream<Long> distinctUserid = blackListUseridDStream.transform(
                 new Function<JavaRDD<Long>, JavaRDD<Long>>() {
-
                     private static final long serialVersionUID = 1L;
 
                     @Override
                     public JavaRDD<Long> call(JavaRDD<Long> rdd) throws Exception {
                         return rdd.distinct();
                     }
+                }
+        );
 
-                });
-
-        // 到这一步为止，distinctBlacklistUseridDStream
-        // 每一个rdd，只包含了userid，而且还进行了全局的去重，保证每一次过滤出来的黑名单用户都没有重复的
-
-        distinctBlacklistUseridDStream.foreachRDD(
+        //将黑名单写入mysql
+        distinctUserid.foreachRDD(
                 new Function<JavaRDD<Long>, Void>() {
-
-            private static final long serialVersionUID = 1L;
-
-            @Override
-            public Void call(JavaRDD<Long> rdd) throws Exception {
-
-                rdd.foreachPartition(new VoidFunction<Iterator<Long>>() {
-
                     private static final long serialVersionUID = 1L;
 
                     @Override
-                    public void call(Iterator<Long> iterator) throws Exception {
-                        List<AdBlacklist> adBlacklists = new ArrayList<AdBlacklist>();
+                    public Void call(JavaRDD<Long> rdd) throws Exception {
 
-                        while(iterator.hasNext()) {
-                            long userid = iterator.next();
+                        rdd.foreachPartition(
+                                new VoidFunction<Iterator<Long>>() {
+                                    private static final long serialVersionUID = 1L;
 
-                            AdBlacklist adBlacklist = new AdBlacklist();
-                            adBlacklist.setUserid(userid);
+                                    @Override
+                                    public void call(Iterator<Long> iterator) throws Exception {
+                                        List<AdBlacklist> adBlacklistList = new ArrayList<AdBlacklist>();
 
-                            adBlacklists.add(adBlacklist);
-                        }
+                                        while (iterator.hasNext()) {
+                                            long userid = iterator.next();
+                                            AdBlacklist adBlacklist = new AdBlacklist();
 
-                        IAdBlacklistDAO adBlacklistDAO = DAOFactory.getAdBlacklistDAO();
-                        if (!adBlacklists.isEmpty()) {
-                            adBlacklistDAO.insertBatch(adBlacklists);
-                        }
+                                            adBlacklist.setUserid(userid);
+                                            adBlacklistList.add(adBlacklist);
+                                        }
 
+                                        IAdBlacklistDAO adBlacklistDAO = DAOFactory.getAdBlacklistDAO();
+                                        if (!adBlacklistList.isEmpty()) {
+                                            adBlacklistDAO.insertBatch(adBlacklistList);
+                                        }
+                                    }
+                                }
+                        );
+                        return null;
                     }
+                }
 
-                });
+        );
 
-                return null;
-            }
-
-        });
-
+        return blackListDStream;
     }
 
 
@@ -556,7 +505,8 @@ public class AdClickRealTimeSpark {
                             Tuple2<String, Long> tuple = iterator.next();
 
                             String[] keySplited = tuple._1.split("_");
-                            String date = keySplited[0];
+                            String date_ = keySplited[0];
+                            String date = date_.substring(0, 4) + "-" + date_.substring(4, 6) + "-" + date_.substring(6, 8);
                             String province = keySplited[1];
                             String city = keySplited[2];
                             long adid = Long.valueOf(keySplited[3]);
@@ -574,7 +524,10 @@ public class AdClickRealTimeSpark {
                         }
 
                         IAdStatDAO adStatDAO = DAOFactory.getAdStatDAO();
-                        adStatDAO.updateBatch(adStats);
+                        if (!adStats.isEmpty()) {
+
+                            adStatDAO.updateBatch(adStats);
+                        }
                     }
 
                 });
@@ -834,8 +787,9 @@ public class AdClickRealTimeSpark {
                             long adid = Long.valueOf(keySplited[1]);
                             long clickCount = tuple._2;
 
-                            String date = DateUtils.formatDate(DateUtils.parseDateKey(
-                                    dateMinute.substring(0, 8)));
+                            String date_ = dateMinute.substring(0, 8);
+                            String date = date_.substring(0, 4) + "-" + date_.substring(4, 6) + "-" + date_.substring(6, 8);
+
                             String hour = dateMinute.substring(8, 10);
                             String minute = dateMinute.substring(10);
 
@@ -901,7 +855,8 @@ public class AdClickRealTimeSpark {
 
                 JavaPairDStream<String, String> filteredAdRealTimeLogDStream =
                         filterByBlacklist(adRealTimeLogDStream);
-                generateDynamicBlacklist(filteredAdRealTimeLogDStream);
+                generateDynamicBlacklist(filteredAdRealTimeLogDStream).print();
+
                 JavaPairDStream<String, Long> adRealTimeStatDStream = calculateRealTimeStat(
                         filteredAdRealTimeLogDStream);
                 calculateProvinceTop3Ad(adRealTimeStatDStream);

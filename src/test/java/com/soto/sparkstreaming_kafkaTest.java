@@ -50,10 +50,10 @@ public class sparkstreaming_kafkaTest {
 
         JavaPairInputDStream<String,String> adRealTimeLogDStream = KafkaUtils.createDirectStream(jssc, String.class, String.class, StringDecoder.class, StringDecoder.class, kafkaParams, topics);
 
-        adRealTimeLogDStream.print();
+//        adRealTimeLogDStream.print();
 
 
-        JavaPairDStream<String,String> filteredAdRealTimeLogDStream = filterByBlacklist(adRealTimeLogDStream);
+        JavaPairDStream<String,String> filteredAdRealTimeLogDStream = filterByBlacklist(adRealTimeLogDStream).cache();
 //        filteredAdRealTimeLogDStream.print();
 
         // 生成动态黑名单
@@ -144,6 +144,11 @@ public class sparkstreaming_kafkaTest {
         return filteredAdRealTimeLogDStream;
     }
 
+    /**
+     * 生成动态黑名单
+     * @param filteredAdRealTimeLogDStream
+     * @return
+     */
     private static JavaPairDStream<String, Long> generateDynamicBlacklist(JavaPairDStream<String, String> filteredAdRealTimeLogDStream) {
 
         // 将日志的格式处理成<yyyyMMdd_userid_adid, 1L>格式

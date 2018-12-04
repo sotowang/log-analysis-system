@@ -146,13 +146,12 @@ public class JDBCHelper {
     public void executeQuery(String sql, Object[] params,
                              QueryCallback callback) {
         Connection conn = null;
-        PreparedStatement pstmt = null;
+
         ResultSet rs = null;
 
         try {
             conn = getConnection();
-            pstmt = conn.prepareStatement(sql);
-
+            PreparedStatement pstmt = conn.prepareStatement(sql);
             if (params != null && params.length > 0) {
                 for (int i = 0; i < params.length; i++) {
                     pstmt.setObject(i + 1, params[i]);

@@ -327,7 +327,10 @@ public class AdClickRealTimeSpark {
                         }
 
                         IAdUserClickCountDAO adUserClickCountDAO = DAOFactory.getAdUserClickCountDAO();
-                        adUserClickCountDAO.updateBatch(adUserClickCounts);
+
+                        if (!adUserClickCounts.isEmpty()) {
+                            adUserClickCountDAO.updateBatch(adUserClickCounts);
+                        }
                     }
                 });
 
@@ -363,7 +366,7 @@ public class AdClickRealTimeSpark {
 
                         // 判断，如果点击量大于等于100就是黑名单用户
                         // 那么就拉入黑名单，返回true
-                        if(clickCount >= 100) {
+                        if(clickCount > 2) {
                             return true;
                         }
 
@@ -409,7 +412,8 @@ public class AdClickRealTimeSpark {
         // 到这一步为止，distinctBlacklistUseridDStream
         // 每一个rdd，只包含了userid，而且还进行了全局的去重，保证每一次过滤出来的黑名单用户都没有重复的
 
-        distinctBlacklistUseridDStream.foreachRDD(new Function<JavaRDD<Long>, Void>() {
+        distinctBlacklistUseridDStream.foreachRDD(
+                new Function<JavaRDD<Long>, Void>() {
 
             private static final long serialVersionUID = 1L;
 
@@ -434,8 +438,9 @@ public class AdClickRealTimeSpark {
                         }
 
                         IAdBlacklistDAO adBlacklistDAO = DAOFactory.getAdBlacklistDAO();
-                        adBlacklistDAO.insertBatch(adBlacklists);
-
+                        if (!adBlacklists.isEmpty()) {
+                            adBlacklistDAO.insertBatch(adBlacklists);
+                        }
 
                     }
 
@@ -654,12 +659,14 @@ public class AdClickRealTimeSpark {
                                     public Row call(Tuple2<String, Long> tuple)
                                             throws Exception {
                                         String[] keySplited = tuple._1.split("_");
-                                        String datekey = keySplited[0];
+                                        String date_ = keySplited[0];
                                         String province = keySplited[1];
                                         long adid = Long.valueOf(keySplited[2]);
                                         long clickCount = tuple._2;
 
-                                        String date = DateUtils.formatDate(DateUtils.parseDateKey(datekey)).toString();
+                                        String date = date_.substring(0, 4) + "-" + date_.substring(4, 6) + "-" + date_.substring(6, 8);
+
+//                                        String date = DateUtils.formatDate(DateUtils.parseDateKey(datekey));
 
                                         return RowFactory.create(date, province, adid, clickCount);
                                     }
@@ -738,7 +745,9 @@ public class AdClickRealTimeSpark {
                         }
 
                         IAdProvinceTop3DAO adProvinceTop3DAO = DAOFactory.getAdProvinceTop3DAO();
-                        adProvinceTop3DAO.updateBatch(adProvinceTop3s);
+                        if (!adProvinceTop3s.isEmpty()) {
+                            adProvinceTop3DAO.updateBatch(adProvinceTop3s);
+                        }
                     }
 
                 });
@@ -841,7 +850,11 @@ public class AdClickRealTimeSpark {
                         }
 
                         IAdClickTrendDAO adClickTrendDAO = DAOFactory.getAdClickTrendDAO();
-                        adClickTrendDAO.updateBatch(adClickTrends);
+
+                        if (!adClickTrends.isEmpty()) {
+
+                            adClickTrendDAO.updateBatch(adClickTrends);
+                        }
                     }
 
                 });

@@ -34,7 +34,7 @@ public class sparkstreaming_kafkaTest {
                 .setAppName("sparkstreaming_kafkaTest")
                 .setMaster("local[2]");
 
-        JavaStreamingContext jssc = new JavaStreamingContext(conf, Durations.seconds(20));
+        JavaStreamingContext jssc = new JavaStreamingContext(conf, Durations.seconds(5));
 
         Map<String,String> kafkaParams = new HashMap<String, String>();
         kafkaParams.put("metadata.broker.list", ConfigurationManager.getProperty(Constants.KAFKA_METADATA_BROKER_LIST));
@@ -213,7 +213,9 @@ public class sparkstreaming_kafkaTest {
                                         }
 
                                         IAdUserClickCountDAO adUserClickCountDAO = DAOFactory.getAdUserClickCountDAO();
-                                        adUserClickCountDAO.updateBatch(adUserClickCountList);
+                                        if (!adUserClickCountList.isEmpty()) {
+                                            adUserClickCountDAO.updateBatch(adUserClickCountList);
+                                        }
 
                                     }
                                 }
@@ -240,7 +242,7 @@ public class sparkstreaming_kafkaTest {
                         IAdUserClickCountDAO adUserClickCountDAO = DAOFactory.getAdUserClickCountDAO();
                         int count = adUserClickCountDAO.findClickCountByMultiKey(date, userid, adid);
 
-                        if (count > 5) {
+                        if (count > 1) {
                             return true;
                         }else
                             return false;
@@ -257,7 +259,7 @@ public class sparkstreaming_kafkaTest {
                     @Override
                     public Long call(Tuple2<String, Long> tuple) throws Exception {
                         String log = tuple._1;
-                        Long userid = Long.valueOf(log.split("_")[3]);
+                        Long userid = Long.valueOf(log.split("_")[1]);
                         return userid;
                     }
 
@@ -276,7 +278,41 @@ public class sparkstreaming_kafkaTest {
         );
 
         //将黑名单写入mysql
+         distinctUserid.foreachRDD(
+                new Function<JavaRDD<Long>, Void>() {
+                    private static final long serialVersionUID = 1L;
 
+                    @Override
+                    public Void call(JavaRDD<Long> rdd) throws Exception {
+
+                        rdd.foreachPartition(
+                                new VoidFunction<Iterator<Long>>() {
+                                    private static final long serialVersionUID = 1L;
+
+                                    @Override
+                                    public void call(Iterator<Long> iterator) throws Exception {
+                                        List<AdBlacklist> adBlacklistList = new ArrayList<AdBlacklist>();
+
+                                        while (iterator.hasNext()) {
+                                            long userid = iterator.next();
+                                            AdBlacklist adBlacklist = new AdBlacklist();
+
+                                            adBlacklist.setUserid(userid);
+                                            adBlacklistList.add(adBlacklist);
+                                        }
+
+                                        IAdBlacklistDAO adBlacklistDAO = DAOFactory.getAdBlacklistDAO();
+                                        if (!adBlacklistList.isEmpty()) {
+                                            adBlacklistDAO.insertBatch(adBlacklistList);
+                                        }
+                                    }
+                                }
+                        );
+                        return null;
+                    }
+                }
+
+        );
 
         return blackListDStream;
     }

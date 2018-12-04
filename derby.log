@@ -1,7 +1,7 @@
 ----------------------------------------------------------------
-Mon Dec 03 20:23:14 CST 2018:
-Booting Derby version The Apache Software Foundation - Apache Derby - 10.11.1.1 - (1616546): instance a816c00e-0167-7405-c3d3-000009b028f0 
-on database directory /tmp/spark-50c9eaa9-7af0-4934-a55e-918400abcd71/metastore with class loader sun.misc.Launcher$AppClassLoader@18b4aac2 
+Tue Dec 04 11:05:41 CST 2018:
+Booting Derby version The Apache Software Foundation - Apache Derby - 10.11.1.1 - (1616546): instance a816c00e-0167-772d-ae45-000010401b40 
+on database directory /tmp/spark-82538e8f-0522-4fc1-a6a6-62f211eda692/metastore with class loader sun.misc.Launcher$AppClassLoader@18b4aac2 
 Loaded from file:/home/sotowang/user/aur/ide/idea/idea-IU-182.3684.101/plugins/maven/repository/org/apache/derby/derby/10.11.1.1/derby-10.11.1.1.jar
 java.vendor=Oracle Corporation
 java.runtime.version=1.8.0_192-b26
@@ -12,9 +12,87 @@ os.version=4.14.85-1-MANJARO
 derby.system.home=null
 Database Class Loader started - derby.database.classpath=''
 ----------------------------------------------------------------
-Mon Dec 03 20:23:28 CST 2018:
-Booting Derby version The Apache Software Foundation - Apache Derby - 10.11.1.1 - (1616546): instance da248395-0167-7405-c3d3-000009b028f0 
-on database directory /tmp/spark-77fb5e46-0382-4076-a683-e4d20b69be4c/metastore with class loader sun.misc.Launcher$AppClassLoader@18b4aac2 
+Tue Dec 04 11:05:47 CST 2018:
+Booting Derby version The Apache Software Foundation - Apache Derby - 10.11.1.1 - (1616546): instance da248395-0167-772d-ae45-000010401b40 
+on database directory /tmp/spark-c2867a7e-6208-409c-a7ea-859604e88f86/metastore with class loader sun.misc.Launcher$AppClassLoader@18b4aac2 
+Loaded from file:/home/sotowang/user/aur/ide/idea/idea-IU-182.3684.101/plugins/maven/repository/org/apache/derby/derby/10.11.1.1/derby-10.11.1.1.jar
+java.vendor=Oracle Corporation
+java.runtime.version=1.8.0_192-b26
+user.dir=/home/sotowang/user/aur/ide/idea/idea-IU-182.3684.101/workspace/sparkhomework
+os.name=Linux
+os.arch=amd64
+os.version=4.14.85-1-MANJARO
+derby.system.home=null
+Database Class Loader started - derby.database.classpath=''
+----------------------------------------------------------------
+Tue Dec 04 11:05:52 CST 2018:
+Booting Derby version The Apache Software Foundation - Apache Derby - 10.11.1.1 - (1616546): instance d7ae46d2-0167-772d-ae45-000010401b40 
+on database directory /tmp/spark-ea676a0e-69fe-45f3-a459-510b186621b7/metastore with class loader sun.misc.Launcher$AppClassLoader@18b4aac2 
+Loaded from file:/home/sotowang/user/aur/ide/idea/idea-IU-182.3684.101/plugins/maven/repository/org/apache/derby/derby/10.11.1.1/derby-10.11.1.1.jar
+java.vendor=Oracle Corporation
+java.runtime.version=1.8.0_192-b26
+user.dir=/home/sotowang/user/aur/ide/idea/idea-IU-182.3684.101/workspace/sparkhomework
+os.name=Linux
+os.arch=amd64
+os.version=4.14.85-1-MANJARO
+derby.system.home=null
+Database Class Loader started - derby.database.classpath=''
+----------------------------------------------------------------
+Tue Dec 04 11:05:56 CST 2018:
+Booting Derby version The Apache Software Foundation - Apache Derby - 10.11.1.1 - (1616546): instance 045a4a0f-0167-772d-ae45-000010401b40 
+on database directory /tmp/spark-ab3d3a86-0ebe-4fbd-801f-675716350553/metastore with class loader sun.misc.Launcher$AppClassLoader@18b4aac2 
+Loaded from file:/home/sotowang/user/aur/ide/idea/idea-IU-182.3684.101/plugins/maven/repository/org/apache/derby/derby/10.11.1.1/derby-10.11.1.1.jar
+java.vendor=Oracle Corporation
+java.runtime.version=1.8.0_192-b26
+user.dir=/home/sotowang/user/aur/ide/idea/idea-IU-182.3684.101/workspace/sparkhomework
+os.name=Linux
+os.arch=amd64
+os.version=4.14.85-1-MANJARO
+derby.system.home=null
+Database Class Loader started - derby.database.classpath=''
+----------------------------------------------------------------
+Tue Dec 04 11:06:00 CST 2018:
+Booting Derby version The Apache Software Foundation - Apache Derby - 10.11.1.1 - (1616546): instance b0288d4c-0167-772d-ae45-000010401b40 
+on database directory /tmp/spark-8461cfb6-19d6-45d8-88b4-c31e3d4384a3/metastore with class loader sun.misc.Launcher$AppClassLoader@18b4aac2 
+Loaded from file:/home/sotowang/user/aur/ide/idea/idea-IU-182.3684.101/plugins/maven/repository/org/apache/derby/derby/10.11.1.1/derby-10.11.1.1.jar
+java.vendor=Oracle Corporation
+java.runtime.version=1.8.0_192-b26
+user.dir=/home/sotowang/user/aur/ide/idea/idea-IU-182.3684.101/workspace/sparkhomework
+os.name=Linux
+os.arch=amd64
+os.version=4.14.85-1-MANJARO
+derby.system.home=null
+Database Class Loader started - derby.database.classpath=''
+----------------------------------------------------------------
+Tue Dec 04 11:06:05 CST 2018:
+Booting Derby version The Apache Software Foundation - Apache Derby - 10.11.1.1 - (1616546): instance 2b191089-0167-772d-ae45-000010401b40 
+on database directory /tmp/spark-96042fbd-badd-4f67-b6d6-bc78246cdc4c/metastore with class loader sun.misc.Launcher$AppClassLoader@18b4aac2 
+Loaded from file:/home/sotowang/user/aur/ide/idea/idea-IU-182.3684.101/plugins/maven/repository/org/apache/derby/derby/10.11.1.1/derby-10.11.1.1.jar
+java.vendor=Oracle Corporation
+java.runtime.version=1.8.0_192-b26
+user.dir=/home/sotowang/user/aur/ide/idea/idea-IU-182.3684.101/workspace/sparkhomework
+os.name=Linux
+os.arch=amd64
+os.version=4.14.85-1-MANJARO
+derby.system.home=null
+Database Class Loader started - derby.database.classpath=''
+----------------------------------------------------------------
+Tue Dec 04 11:06:10 CST 2018:
+Booting Derby version The Apache Software Foundation - Apache Derby - 10.11.1.1 - (1616546): instance c52bd3c6-0167-772d-ae45-000010401b40 
+on database directory /tmp/spark-f65d7cb4-cc68-4f85-a0b9-ca3952491a9a/metastore with class loader sun.misc.Launcher$AppClassLoader@18b4aac2 
+Loaded from file:/home/sotowang/user/aur/ide/idea/idea-IU-182.3684.101/plugins/maven/repository/org/apache/derby/derby/10.11.1.1/derby-10.11.1.1.jar
+java.vendor=Oracle Corporation
+java.runtime.version=1.8.0_192-b26
+user.dir=/home/sotowang/user/aur/ide/idea/idea-IU-182.3684.101/workspace/sparkhomework
+os.name=Linux
+os.arch=amd64
+os.version=4.14.85-1-MANJARO
+derby.system.home=null
+Database Class Loader started - derby.database.classpath=''
+----------------------------------------------------------------
+Tue Dec 04 11:06:15 CST 2018:
+Booting Derby version The Apache Software Foundation - Apache Derby - 10.11.1.1 - (1616546): instance ce60d703-0167-772d-ae45-000010401b40 
+on database directory /tmp/spark-add485b8-3f8b-4ac6-98e8-e7a0743b9ea2/metastore with class loader sun.misc.Launcher$AppClassLoader@18b4aac2 
 Loaded from file:/home/sotowang/user/aur/ide/idea/idea-IU-182.3684.101/plugins/maven/repository/org/apache/derby/derby/10.11.1.1/derby-10.11.1.1.jar
 java.vendor=Oracle Corporation
 java.runtime.version=1.8.0_192-b26

@@ -172,7 +172,31 @@ user_info表，实际上，就是一张最普通的用户基础信息表；这�
 6、通过Spark的各种功能和技术点，进行各种聚合、采样、排序、取TopN业务的实现
 ```
 
+### JDBC原理
 
+JDBC，Java Database Connectivity，Java数据库连接技术。
+
+JDBC，其实只是代表了JDK提供的一套面向数据库的一套开发接口，注意，这里大部分仅仅是接口而已换句话说，你的Java应用程序，光有JDBC，是操作不了数据库的，更不用谈所谓的CRUD，增删改查。因为JDBC只是一套接口，接口，接口而已
+
+**JDBC真正的意义在于通过接口统一了java程序对各种数据库的访问的规范**
+
+数据库厂商提供的JDBC驱动，JDBC Driver。**即JDBC的实现类**
+
+数据库厂商，比如说，MySQL公司，或者Oracle公司，会针对JDBC的一套接口，提供完整的一套接口的实现类在这套实现类中，不同的数据库厂商就实现了针对自己数据库的一套连接、执行SQL语句等等实际的功能
+
+ 实际上，在项目中，我们一般不会直接使用JDBC；而是会使用J2EE的一些开源框架，比如MyBatis，也可以是Hibernate而且为了方便框架的整合使用，我们通常都会在spark作业中，使用Spring开源框架，进行各种技术的整合 比如Kafka、Redis、ZooKeeper、Thrift
+
+MyBatis/Hibernate这种操作数据库的框架，其实底层也是基于JDBC进行封装的，只不过提供了更加方便快捷的使用大大提升了我们的开发效率
+
+总结一下JDBC的最基本的使用过程
+
+```
+1、加载驱动类：Class.forName()
+2、获取数据库连接：DriverManager.getConnection()
+3、创建SQL语句执行句柄：Connection.createStatement()
+4、执行SQL语句：Statement.executeUpdate()
+5、释放数据库连接资源：finally，Connection.close()
+```
 
 
 

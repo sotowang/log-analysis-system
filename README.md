@@ -917,6 +917,8 @@ Spark在Driver上，对Application的每一个stage的task，进行分配之前�
   
 ## JVM调优
 
+### 降低cache操作的内存占比
+
 * **理论基础**：spark是用scala开发的。大家不要以为scala就跟java一点关系都没有了，这是一个很常见的错误。
 
   spark的scala代码调用了很多java api。scala也是运行在java虚拟机中的。
@@ -985,9 +987,17 @@ Spark在Driver上，对Application的每一个stage的task，进行分配之前�
 
 spark.storage.memoryFraction，0.6 -> 0.5 -> 0.4 -> 0.2
 
+### executor堆外内存与连接等待时长
 
+executor堆外
 
+内存有时候，如果你的spark作业处理的数据量特别特别大，几亿数据量；然后spark作业一运行，时不时的报错，shuffle file cannot find，executor、task lost，out of memory（内存溢出）；
 
+可能是说executor的堆外内存不太够用，导致executor在运行的过程中，可能会内存溢出；然后可能导致后续的stage的task在运行的时候，可能要从一些executor中去拉取shuffle map output文件，但是executor可能已经挂掉了，关联的block manager也没有了；所以可能会报shuffle output file not found；resubmitting task；executor lost；spark作业彻底崩溃。
+
+上述情况下，就可以去考虑调节一下executor的堆外内存。也许就可以避免报错；此外，有时，堆外内存调节的比较大的时候，对于性能来说，也会带来一定的提升。
+
+![1551514531252](/tmp/1551514531252.png)
 
 
 

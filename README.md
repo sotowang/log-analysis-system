@@ -456,7 +456,9 @@ JSON在企业级项目开发过程中，扮演的角色是无比重要的。最�
 
 **使用这个工具包，可以方便的将字符串类型的JSON数据，转换为一个JSONObject对象，然后通过其中的getX()方法，获取指定的字段的值。**
 
-### session聚合统计之自定义聚合函数 SessionAggrStatAccumulator.java
+### session聚合统计
+
+#### 自定义聚合函数 SessionAggrStatAccumulator.java
 
 * session聚合统计：
 
@@ -488,7 +490,7 @@ Accumulator 1s_3s = sc.accumulator(0L);。。。。。。十几个Accumulator
 
 自定义Accumulator，也是Spark Core中，属于比较高端的一个技术使用自定义Accumulator，大家就可以任意的实现自己的复杂分布式计算的逻辑如果说，你的task，分布式，进行复杂计算逻辑，那么是很难实现的（借助于redis，维护中间状态，借助于zookeeper去实现分布式锁）但是，**使用自定义Accumulator，可以更方便进行中间状态的维护，而且不用担心并发和锁的问题**
 
-### session聚合统计之重构实现思路与重构session聚合
+#### 重构实现思路与重构session聚合
 
 如果不进行重构，直接来实现，思路：
 
@@ -540,7 +542,9 @@ shuffle操作，会导致大量的磁盘读写，严重降低性能
 我们如果采用第一种实现方案，那么其实就是代码划分（解耦合、可维护）优先，设计优先
 如果采用第二种方案，那么其实就是性能优先
 
-### session随机抽取之实现思路分析
+### session随机抽取
+
+* **实现思路分析**
 
 每一次执行用户访问session分析模块，要抽取出100个session
 
@@ -556,6 +560,9 @@ session聚合数据进行映射，将每个session发生的yyyy-MM-dd_HH（start
 
 把之前转换后的session数据（以yyyy-MM-dd_HH作为key），执行groupByKey算子；然后可以遍历每天每小时的session，遍历时，遇到之前计算出来的要抽取的索引，即将session抽取出来；抽取出来的session，直接写入MySQL数据库
 
+### top10热门品类
+
+* **实现思路分析**
 
 
 
@@ -568,23 +575,18 @@ session聚合数据进行映射，将每个session发生的yyyy-MM-dd_HH（start
 
 
 
-## 各区域最热门top3商品
 
-* 用户的商品点击行为
 
-* UDAF函数
 
-* RDD转换DataFrame，注册临时表
 
-* 开窗函数
 
-* Spark SQL数据倾斜解决
 
----
 
-## 广告流量实时统计
 
-* 用户的广告点击行为 
+
+
+
+
 
 
 
@@ -713,4 +715,7 @@ kafka-console-producer.sh --broker-list localhost:9092 --topic AdRealTimeLog
 kafka-console-consumer.sh --zookeeper localhost:2181 --topic AdRealTimeLog
 ```
 
+## 问题
 
+* row.getAsLong()
+* action操作先执行

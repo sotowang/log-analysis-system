@@ -828,13 +828,93 @@ Kryo之所以没有被作为默认的序列化类库的原因，就要出现了�
 
 ### 在实际项目中使用fastutil优化数据格式
 
+* **fastutil介绍：**
 
+  fastutil是扩展了Java标准集合框架（Map、List、Set；HashMap、ArrayList、HashSet）的类库，提供了特殊类型的map、set、list和queue；fastutil能够提供更小的内存占用，更快的存取速度；我们使用fastutil提供的集合类，来替代自己平时使用的JDK的原生的Map、List、Set，好处在于，fastutil集合类，可以减小内存的占用，并且在进行集合的遍历、根据索引（或者key）获取元素的值和设置元素的值的时候，提供更快的存取速度；fastutil也提供了64位的array、set和list，以及高性能快速的，以及实用的IO类，来处理二进制和文本类型的文件；fastutil最新版本要求Java 7以及以上版本；
 
+  fastutil的每一种集合类型，都实现了对应的Java中的标准接口（比如fastutil的map，实现了Java的Map接口），因此可以直接放入已有系统的任何代码中。fastutil还提供了一些JDK标准类库中没有的额外功能（比如双向迭代器）。
 
+  fastutil除了对象和原始类型为元素的集合，fastutil也提供引用类型的支持，但是对引用类型是使用等于号（=）进行比较的，而不是equals()方法。fastutil尽量提供了在任何场景下都是速度最快的集合类库。
 
+* **Spark中应用fastutil的场景：**
 
+  1、如果算子函数使用了外部变量；
 
+  那么第一，你可以使用Broadcast广播变量优化；
 
+  第二，可以使用Kryo序列化类库，提升序列化性能和效率；
+
+  第三，如果外部变量是某种比较大的集合，那么可以考虑使用fastutil改写外部变量，首先从源头上就减少内存的占用，通过广播变量进一步减少内存占用，再通过Kryo序列化类库进一步减少内存占用。
+
+  2、在你的算子函数里，也就是task要执行的计算逻辑里面，如果有逻辑中，出现，要创建比较大的Map、List等集合，可能会占用较大的内存空间，而且可能涉及到消耗性能的遍历、存取等集合操作；那么此时，可以考虑将这些集合类型使用fastutil类库重写，使用了fastutil集合类以后，就可以在一定程度上，减少task创建出来的集合类型的内存占用。避免executor内存频繁占满，频繁唤起GC，导致性能下降。
+
+* 关于fastutil调优的说明：
+
+  fastutil其实没有你想象中的那么强大，也不会跟官网上说的效果那么一鸣惊人。广播变量、Kryo序列化类库、fastutil，都是之前所说的，对于性能来说，类似于一种调味品，烤鸡，本来就很好吃了，然后加了一点特质的孜然麻辣粉调料，就更加好吃了一点。分配资源、并行度、RDD架构与持久化，这三个就是烤鸡；broadcast、kryo、fastutil，类似于调料。
+
+  比如说，你的spark作业，经过之前一些调优以后，大概30分钟运行完，现在加上broadcast、kryo、fastutil，也许就是优化到29分钟运行完、或者更好一点，也许就是28分钟、25分钟。
+
+  shuffle调优，15分钟；groupByKey用reduceByKey改写，执行本地聚合，也许10分钟；跟公司申请更多的资源，比如资源更大的YARN队列，1分钟。
+
+* fastutil的使用：第一步：在pom.xml中引用fastutil的包<
+
+  ```xml
+  <dependency>
+      <groupId>fastutil</groupId>
+      <artifactId>fastutil</artifactId>
+      <version>5.0.9</version>
+  </dependency>
+  ```
+
+  速度比较慢，可能是从国外的网去拉取jar包，可能要等待5分钟，甚至几十分钟，不等
+
+  List<Integer> => IntList
+
+  基本都是类似于IntList的格式，前缀就是集合的元素类型；特殊的就是Map，Int2IntMap，代表了key-value映射的元素类型。除此之外，刚才也看到了，还支持object、reference。
+
+### 在实际项目中调节数据本地化等待时长
+
+**PROCESS_LOCAL**：进程本地化，代码和数据在同一个进程中，也就是在同一个executor中；计算数据的task由executor执行，数据在executor的BlockManager中；性能最好
+
+**NODE_LOCAL**：节点本地化，代码和数据在同一个节点中；比如说，数据作为一个HDFS block块，就在节点上，而task在节点上某个executor中运行；或者是，数据和task在一个节点上的不同executor中；数据需要在进程间进行传输
+
+**NO_PREF**：对于task来说，数据从哪里获取都一样，没有好坏之分
+
+**RACK_LOCAL**：机架本地化，数据和task在一个机架的两个节点上；数据需要通过网络在节点之间进行传输ANY：数据和task可能在集群中的任何地方，而且不在一个机架中，性能最差
+
+**spark.locality.wait**，默认是3s
+
+Spark在Driver上，对Application的每一个stage的task，进行分配之前，都会计算出每个task要计算的是哪个分片数据，RDD的某个partition；Spark的task分配算法，优先，会希望每个task正好分配到它要计算的数据所在的节点，这样的话，就不用在网络间传输数据；
+
+但是呢，通常来说，有时，事与愿违，可能task没有机会分配到它的数据所在的节点，为什么呢，可能那个节点的计算资源和计算能力都满了；所以呢，这种时候，通常来说，Spark会等待一段时间，默认情况下是3s钟（不是绝对的，还有很多种情况，对不同的本地化级别，都会去等待），到最后，实在是等待不了了，就会选择一个比较差的本地化级别，比如说，将task分配到靠它要计算的数据所在节点，比较近的一个节点，然后进行计算。
+
+但是对于第二种情况，通常来说，肯定是要发生数据传输，task会通过其所在节点的BlockManager来获取数据，BlockManager发现自己本地没有数据，会通过一个getRemote()方法，通过TransferService（网络数据传输组件）从数据所在节点的BlockManager中，获取数据，通过网络传输回task所在节点。
+
+对于我们来说，当然不希望是类似于第二种情况的了。最好的，当然是task和数据在一个节点上，直接从本地executor的BlockManager中获取数据，纯内存，或者带一点磁盘IO；如果要通过网络传输数据的话，那么实在是，性能肯定会下降的，大量网络传输，以及磁盘IO，都是性能的杀手。
+
+* 我们什么时候要调节这个参数？
+
+  观察日志，spark作业的运行日志，推荐大家在测试的时候，先用client模式，在本地就直接可以看到比较全的日志。日志里面会显示，starting task。。。，PROCESS LOCAL、NODE LOCAL观察大部分task的数据本地化级别
+
+  如果大多都是PROCESS_LOCAL，那就不用调节了
+
+  如果是发现，好多的级别都是NODE_LOCAL、ANY，那么最好就去调节一下数据本地化的等待时长调节完，应该是要反复调节，每次调节完以后，再来运行，观察日志看看大部分的task的本地化级别有没有提升；看看，整个spark作业的运行时间有没有缩短
+
+  你别本末倒置，本地化级别倒是提升了，但是因为大量的等待时长，spark作业的运行时间反而增加了，那就还是不要调节了怎么调节？
+
+  spark.locality.wait，默认是3s；6s，10s
+
+  默认情况下，下面3个的等待时长，都是跟上面那个是一样的，都是3s
+
+  ```java
+  spark.locality.wait.process
+  spark.locality.wait.node
+  spark.locality.wait.rack
+  new SparkConf()  
+      .set("spark.locality.wait", "10")
+  ```
+
+  
 
 
 

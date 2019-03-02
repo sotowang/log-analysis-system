@@ -262,12 +262,6 @@ MyBatis/Hibernate这种操作数据库的框架，其实底层也是基于JDBC�
 2、JDBC辅助组件，全局就只有一个实例，实例中持有了一个内部的简单数据源使用了单例模式之后，就保证只有一个实例，那么数据源也只有一个，不会重复创建多次数据源（数据库连接池）
 ```
 
-
-
-
-
-
-
 ### 内部类及匿名内部类
 
 外部类：最普通的，我们平时见到的那种类，就是在一个后缀为.java的文件中，直接定义的类，比如
@@ -336,6 +330,107 @@ public class SayHelloTest {
 那么，此时，通常不会选择在外部创建一个类，而是选择直接创建一个实现了某个接口、或者继承了某个父类的内部类，而且通常是在方法内部，创建一个匿名内部类。
 
 在使用java进行spark编程的时候，如果使用的是java7以及之前的版本，那么通常在对某个RDD执行算子，并传入算子的函数的时候，通常都会传入一个实现了某个Spark Java API中Function接口的匿名内部类。
+
+### JavaBean
+
+JavaBean，虽然就是一个类，但是是有特殊条件的一个类，不是所有的类都可以叫做JavaBean的首先，它需要有一些field，这些field，都必须用private来修饰，表示所有的field，都是私有化的，不能随意的获取和设置其次，需要给所有的field，都提供对应的setter和getter方法，什么叫setter和getter？setter，就是说setX()方法，用于给某个field设置值；getter，就是说getX()方法，用于对某个field获取值
+
+```java
+public class Student {
+  
+  private String name;
+  private int age;
+
+  public void setName(String name) {
+    this.name = name;
+  }
+  public String getName() {
+    return name;
+  }
+  public void setAge(int age) {
+    this.age = age;
+  }
+  public int getAge() {
+    return age;
+  }
+
+}
+
+```
+
+* JavaBean通常怎么用？
+
+通常来说，会将一个JavaBean，与数据库中的某个表一一对应起来比如说，有一个student表，
+
+```
+create table student(name varchar(30), age integer)
+```
+
+那么这个表，如果要操作的话，通常来说，会在程序中，建立一个对应的JavaBean，这个JavaBean中，所有的field，都是和表中的字段一一对应起来的。
+
+然后在执行增删改查操作的时候，其实都是面向JavaBean来操作的，比如insertStudent()方法，就应该接收一个参数，Student对象；
+
+findAllStudent()方法，就应该将返回类型设置为List<Student>列表
+
+* domain的概念：
+
+在系统中，通常会分很多层，比如经典的三层架构，控制层、业务层、数据访问层（DAO层）
+
+此外，还有一个层，就是domain层
+
+domain层，通常就是用于放置这个系统中，与数据库中的表，一一对应起来的JavaBean的
+
+三层架构+domain层+model层（J2EE web系统）
+
+浏览器->后台->控制层->业务层->数据访问层->数据库 	 
+
+domain->domain->domain->SQL		
+
+domain/model<-domain和model可能都是JavaBean；**之间的区别，只是用途不太一样，domain通常就代表了与数据库表一一对应的JavaBean；model通常代表了不与数据库一一对应的JavaBean，但是封装的数据，是前端的JS脚本，需要使用的一些数据。**
+
+### DAO模式
+
+> Data Access Object：数据访问对象
+
+引入了DAO模式以后，就大大降低了业务逻辑层和数据访问层的耦合，大大提升了后期的系统维护的效率，并降低了时间成本。我们自己在实现DAO模式的时候，通常来说，会将其分为两部分，
+
+**一个是DAO接口；一个是DAO实现类。我们的业务的代码，通常就是面向接口进行编程；那么当接口的实现需要改变的时候，直接定义一个新的实现即可。但是对于我们的业务代码来说，只要面向接口开发就可以了。DAO的改动对业务代码应该没有任何的影响。**
+
+### 工厂模式
+
+* 如果没有工厂模式，可能会出现的问题：
+
+ITaskDAO接口和TaskDAOImpl实现类；实现类是可能会更换的；那么，如果你就使用普通的方式来创建DAO，
+
+比如ITaskDAO taskDAO = new TaskDAOImpl()
+
+那么后续，如果你的TaskDAO的实现类变更了，那么你就必须在你的程序中，所有出现过TaskDAOImpl的地方，去更换掉这个实现类。这是非常非常麻烦的。
+
+如果说，你的TaskDAOImpl这个类，在你的程序中出现了100次，那么你就需要修改100个地方。这对程序的维护是一场灾难。
+
+* 工厂设计模式
+
+对于一些种类的对象，使用一个工厂，来提供这些对象创建的方式，外界要使用某个类型的对象时，就直接通过工厂来获取即可。不用自己手动一个一个地方的去创建对应的对象。
+
+那么，假使我们有100个地方用到了TaskDAOImpl。不需要去在100个地方都创建TaskDAOImpl()对象，只要在100个地方，都使用TaskFactory.getTaskDAO()方法，获取出来ITaskDAO接口类型的对象即可。
+
+**如果后面，比如说MySQL迁移到Oracle，我们重新开发了一套TaskDAOImpl实现类，那么就直接在工厂方法中，更换掉这个类即可。不需要再所有使用到的地方都去修改。**
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

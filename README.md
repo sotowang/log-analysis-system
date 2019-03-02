@@ -999,13 +999,161 @@ executor堆外
 
 ![1551514531252](/tmp/1551514531252.png)
 
+如果此时，stage0的executor挂了，block manager也没有了；此时，stage1的executor的task，虽然通过Driver的MapOutputTrakcer获取到了自己数据的地址；但是实际上去找对方的block manager获取数据的时候，是获取不到的
+
+此时，就会在spark-submit运行作业（jar），client（standalone client、yarn client），在本机就会打印出log
+
+shuffle output file not found。。。DAGScheduler，resubmitting task，一直会挂掉。
+
+反复挂掉几次，反复报错几次
+
+整个spark作业就崩溃了
+
+```bash
+--conf spark.yarn.executor.memoryOverhead=2048
+```
 
 
 
+spark-submit脚本里面，去用--conf的方式，去添加配置；一定要注意！！！切记，不是在你的spark作业代码中，用new SparkConf().set()这种方式去设置，不要这样去设置，是没有用的！一定要在spark-submit脚本中去设置。
 
+spark.yarn.executor.memoryOverhead（看名字，顾名思义，针对的是基于yarn的提交模式）**默认情况下，这个堆外内存上限大概是300多M**；后来我们通常项目中，真正处理大数据的时候，这里都会出现问题，导致spark作业反复崩溃，无法运行；此时就会去调节这个参数，到至少1G（1024M），甚至说2G、4G
 
+通常这个参数调节上去以后，就会避免掉某些JVM OOM的异常问题，同时呢，会让整体spark作业的性能，得到较大的提升。
 
+executor，优先从自己本地关联的BlockManager中获取某份数据如果本地block manager没有的话，那么会通过TransferService，去远程连接其他节点上executor的block manager去获取
 
+task创建的对象特别大，特别多,频繁的让JVM堆内存满溢，进行垃圾回收。
+
+此时呢，就会没有响应，无法建立网络连接；会卡住；ok，spark默认的网络连接的超时时长，是60s；如果卡住60s都无法建立连接的话，那么就宣告失败了。
+
+碰到一种情况，偶尔，偶尔，偶尔！！！没有规律！！！某某file。一串file id。uuid（dsfsfd-2342vs--sdf--sdfsd）。not found。file lost。
+
+这种情况下，很有可能是有那份数据的executor在jvm gc。所以拉取数据的时候，建立不了连接。然后超过默认60s以后，直接宣告失败。报错几次，几次都拉取不到数据的话，可能会导致spark作业的崩溃。也可能会导致DAGScheduler，反复提交几次stage。TaskScheduler，反复提交几次task。大大延长我们的spark作业的运行时间。
+
+可以考虑调节连接的超时时长。
+
+```bash
+--conf spark.core.connection.ack.wait.timeout=300
+```
+
+spark-submit脚本，切记，**不是在new SparkConf().set()这种方式来设置的**。
+
+spark.core.connection.ack.wait.timeout（spark core，connection，连接，ack，wait timeout，建立不上连接的时候，超时等待时长）
+
+调节这个值比较大以后，通常来说，可以避免部分的偶尔出现的某某文件拉取失败，某某文件lost掉了。。。
+
+## Shuffle调优
+
+* 什么样的情况下，会发生shuffle？
+
+在spark中，主要是以下几个算子：groupByKey、reduceByKey、countByKey、join，等等。
+
+* 什么是shuffle？
+
+groupByKey，要把分布在集群各个节点上的数据中的同一个key，对应的values，都给集中到一块儿，集中到集群中同一个节点上，更严密一点说，就是集中到一个节点的一个executor的一个task中。
+
+然后呢，集中一个key对应的values之后，才能交给我们来进行处理，<key, Iterable<value>>；
+
+reduceByKey，算子函数去对values集合进行reduce操作，最后变成一个value；
+
+countByKey，需要在一个task中，获取到一个key对应的所有的value，然后进行计数，统计总共有多少个value；
+
+join，RDD<key, value>，RDD<key, value>，只要是两个RDD中，key相同对应的2个value，都能到一个节点的executor的task中，给我们进行处理。
+
+```
+reduceByKey(_+_)
+```
+
+问题在于，同一个单词，比如说（hello, 1），可能散落在不同的节点上；对每个单词进行累加计数，就必须让所有单词都跑到同一个节点的一个task中，给一个task来进行处理。
+
+**shuffle，一定是分为两个stage来完成的。因为这其实是个逆向的过程，不是stage决定shuffle，是shuffle决定stage。**
+
+reduceByKey(_+_)，在某个action触发job的时候，DAGScheduler，会负责划分job为多个stage。划分的依据，就是，**如果发现有会触发shuffle操作的算子，比如reduceByKey，就将这个操作的前半部分，以及之前所有的RDD和transformation操作，划分为一个stage；shuffle操作的后半部分，以及后面的，直到action为止的RDD和transformation操作，划分为另外一个stage。**
+
+* 每一个shuffle的前半部分stage的task，每个task都会创建下一个stage的task数量相同的文件，比如下一个stage会有100个task，那么当前stage每个task都会创建100份文件；会将同一个key对应的values，一定是写入同一个文件中的；不同节点上的task，也一定会将同一个key对应的values，写入下一个stage，同一个task对应的文件中。
+* shuffle的后半部分stage的task，每个task都会从各个节点上的task写的属于自己的那一份文件中，拉取key, value对；然后task会有一个内存缓冲区，然后会用HashMap，进行key, values的汇聚；(key ,values)；task会用我们自己定义的聚合函数，比如reduceByKey(_+_)，把所有values进行一对一的累加；聚合出来最终的值。就完成了shuffle。
+* shuffle前半部分的task在写入数据到磁盘文件之前，都会先写入一个一个的内存缓冲，内存缓冲满溢之后，再spill溢写到磁盘文件中。
+
+![1551515332028](/tmp/1551515332028.png)
+
+### 合并map端输出文件
+
+![1551516763613](/tmp/1551516763613.png)
+
+* 问题来了：默认的这种shuffle行为，对性能有什么样的恶劣影响呢？
+
+实际生产环境的条件：100个节点（每个节点一个executor）：100个executor
+
+每个executor：2个cpu core
+
+总共1000个task：每个executor平均10个task
+
+每个节点，10个task，每个节点会输出多少份map端文件？
+
+> 10 * 1000=1万个文件
+
+总共有多少份map端输出文件？
+
+> 100 * 10000 = 100万。
+
+shuffle中的写磁盘的操作，基本上就是shuffle中性能消耗最为严重的部分。
+
+通过上面的分析，一个普通的生产环境的spark job的一个shuffle环节，会写入磁盘100万个文件。
+
+磁盘IO对性能和spark作业执行速度的影响，是极其惊人和吓人的。**基本上，spark作业的性能，都消耗在shuffle中了，虽然不只是shuffle的map端输出文件这一个部分，但是这里也是非常大的一个性能消耗点。**
+
+```java
+new SparkConf().set("spark.shuffle.consolidateFiles", "true")
+```
+
+开启shuffle map端输出文件合并的机制；默认情况下，是不开启的，就是会发生如上所述的大量map端输出文件的操作，严重影响性能。
+
+* 开启了map端输出文件的合并机制之后：
+
+  第一个stage，同时就运行cpu core个task，比如cpu core是2个，并行运行2个task；每个task都创建下一个stage的task数量个文件；
+
+  第一个stage，并行运行的2个task执行完以后；就会执行另外两个task；另外2个task不会再重新创建输出文件；而是复用之前的task创建的map端输出文件，将数据写入上一批task的输出文件中。
+
+  第二个stage，task在拉取数据的时候，就不会去拉取上一个stage每一个task为自己创建的那份输出文件了；而是拉取少量的输出文件，每个输出文件中，可能包含了多个task给自己的map端输出。
+
+* 提醒一下（map端输出文件合并）：
+
+  只有并行执行的task会去创建新的输出文件；下一批并行执行的task，就会去复用之前已有的输出文件；但是有一个例外，**比如2个task并行在执行，但是此时又启动要执行2个task；那么这个时候的话，就无法去复用刚才的2个task创建的输出文件了；而是还是只能去创建新的输出文件**。
+
+  要实现输出文件的合并的效果，必须是一批task先执行，然后下一批task再执行，才能复用之前的输出文件；负责多批task同时起来执行，还是做不到复用的。
+
+* 开启了map端输出文件合并机制之后，生产环境上的例子，会有什么样的变化？
+
+  实际生产环境的条件：
+
+  100个节点（每个节点一个executor）：100个executor
+
+  每个executor：2个cpu core
+
+  总共1000个task：每个executor平均10个task
+
+  每个节点，2个cpu core，有多少份输出文件呢？2 * 1000 = 2000个总共100个节点，
+
+  总共创建多少份输出文件呢？
+
+  100 * 2000 = 20万个文件
+
+  相比较开启合并机制之前的情况，100万个map端输出文件，在生产环境中，立减5倍！
+
+* 合并map端输出文件，对咱们的spark的性能有哪些方面的影响呢？
+
+  1、map task写入磁盘文件的IO，减少：100万文件 -> 20万文件
+
+  2、第二个stage，原本要拉取第一个stage的task数量份文件，1000个task，第二个stage的每个task，都要拉取1000份文件，走网络传输；合并以后，100个节点，每个节点2个cpu core，第二个stage的每个task，主要拉取100 * 2 = 200个文件即可；网络传输的性能消耗是不是也大大减少
+
+  分享一下，实际在生产环境中，使用了spark.shuffle.consolidateFiles机制以后，实际的性能调优的效果：对于上述的这种生产环境的配置，性能的提升，还是相当的客观的。spark作业，5个小时 -> 2~3个小时。
+
+  大家不要小看这个map端输出文件合并机制。实际上，在数据量比较大，你自己本身做了前面的性能调优，executor上去->cpu core上去->并行度（task数量）上去，shuffle没调优，shuffle就很糟糕了；大量的map端输出文件的产生。对性能有比较恶劣的影响。
+
+  这个时候，去开启这个机制，可以很有效的提升性能。
+
+### 调节map端内存缓冲与reduce端内存占比
 
 
 

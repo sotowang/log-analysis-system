@@ -540,7 +540,21 @@ shuffle操作，会导致大量的磁盘读写，严重降低性能
 我们如果采用第一种实现方案，那么其实就是代码划分（解耦合、可维护）优先，设计优先
 如果采用第二种方案，那么其实就是性能优先
 
+### session随机抽取之实现思路分析
 
+每一次执行用户访问session分析模块，要抽取出100个session
+
+**session随机抽取：**按每天的每个小时的session数量，占当天session总数的比例，乘以每天要抽取的session数量，计算出每个小时要抽取的session数量；然后呢，在每天每小时的session中，随机抽取出之前计算出来的数量的session。
+
+举例：10000个session，100个session；0点~1点之间，有2000个session，占总session的比例就是0.2；按照比例，0点~1点需要抽取出来的session数量是100 * 0.2 = 20个；在0点~点的2000个session中，随机抽取出来20个session。
+
+我们之前有什么数据：session粒度的聚合数据（计算出来session的start_time）
+
+session聚合数据进行映射，将每个session发生的yyyy-MM-dd_HH（start_time）作为key，value就是session_id对上述数据，使用countByKey算子，就可以获取到每天每小时的session数量
+
+（按时间比例随机抽取算法）每天每小时有多少session，根据这个数量计算出每天每小时的session占比，以及按照占比，需要抽取多少session，可以计算出每个小时内，从0~session数量之间的范围中，获取指定抽取数量个随机数，作为随机抽取的索引
+
+把之前转换后的session数据（以yyyy-MM-dd_HH作为key），执行groupByKey算子；然后可以遍历每天每小时的session，遍历时，遇到之前计算出来的要抽取的索引，即将session抽取出来；抽取出来的session，直接写入MySQL数据库
 
 
 

@@ -1239,6 +1239,60 @@ reduce端聚合内存，占比。默认是0.2。如果数据量比较大，reduc
 2、SortShuffleManager会避免像HashShuffleManager那样，默认就去创建多份磁盘文件。一个task，只会写入一个磁盘文件，不同reduce task的数据，用offset来划分界定。
 ```
 
+之前讲解的一些调优的点，比如consolidateFiles机制、map端缓冲、reduce端内存占比。这些对任何shuffle manager都是有用的。
+
+* **如何不sort？**
+
+自己可以设定一个阈值，默认是200，当reduce task数量少于等于200；map task创建的输出文件小于等于200的；最后会将所有的输出文件合并为一份文件。
+
+这样做的好处，就是避免了sort排序，节省了性能开销。而且还能将多个reduce task的文件合并成一份文件。节省了reduce task拉取数据的时候的磁盘IO的开销。
+
+在spark 1.5.x以后，对于shuffle manager又出来了一种新的manager，**tungsten-sort（钨丝），钨丝sort shuffle manager。**
+
+官网上一般说，钨丝sort shuffle manager，效果跟sort shuffle manager是差不多的。但是，唯一的不同之处在于**，钨丝manager，是使用了自己实现的一套内存管理机制，性能上有很大的提升， 而且可以避免shuffle过程中产生的大量的OOM，GC，等等内存相关的异常。**
+
+* 来一个总结，现在相当于把spark的shuffle的东西又多讲了一些。大家理解的更加深入了。hash、sort、tungsten-sort。如何来选择？
+
+1、**需不需要数据默认就让spark给你进行排序？**就好像mapreduce，默认就是有按照key的排序。如果不需要的话，其实还是建议搭建就使用最基本的HashShuffleManager，**因为最开始就是考虑的是不排序，换取高性能；**
+
+2、**什么时候需要用sort shuffle manager？**如果你需要你的那些数据按key排序了，那么就选择这种吧，而且要注意，reduce task的数量应该是超过200的，这样sort、merge（多个文件合并成一个）的机制，才能生效把。但是这里要注意，你一定要自己考量一下，有没有必要在shuffle的过程中，就做这个事情，毕竟对性能是有影响的。
+
+3、如果你不需要排序，而且你希望你的每个task输出的文件最终是会合并成一份的，你自己认为可以减少性能开销；可以去调节bypassMergeThreshold这个阈值，比如你的reduce task数量是500，默认阈值是200，所以默认还是会进行sort和直接merge的；可以将阈值调节成550，不会进行sort，按照hash的做法，每个reduce task创建一份输出文件，最后合并成一份文件。（**一定要提醒大家，这个参数，其实我们通常不会在生产环境里去使用，也没有经过验证说，这样的方式，到底有多少性能的提升**）
+
+4、如果你想选用sort based shuffle manager，而且你们公司的spark版本比较高，是1.5.x版本的，那么可以考虑去尝试使用tungsten-sort shuffle manager。看看性能的提升与稳定性怎么样。
+
+* 总结：
+
+1、在生产环境中，不建议大家贸然使用第三点和第四点：
+
+2、如果你不想要你的数据在shuffle时排序，那么就自己设置一下，用hash shuffle manager。
+
+3、如果你的确是需要你的数据在shuffle时进行排序的，那么就默认不用动，默认就是sort shuffle manager；或者是什么？如果你压根儿不care是否排序这个事儿，那么就默认让他就是sort的。调节一些其他的参数（consolidation机制）。（80%，都是用这种）
+
+```java
+spark.shuffle.manager：hash、sort、tungsten-sort
+new SparkConf().set("spark.shuffle.manager", "hash")new SparkConf().set("spark.shuffle.manager", "tungsten-sort")
+// 默认就是，new SparkConf().set("spark.shuffle.manager", "sort")new SparkConf().set("spark.shuffle.sort.bypassMergeThreshold", "550")
+```
+
+## 算子调优
+
+### MapPartitions提升Map类操作性能
+
+spark中，最基本的原则，就是每个task处理一个RDD的partition。
+
+* **MapPartitions操作的优点：**
+
+如果是普通的map，比如一个partition中有1万条数据；ok，那么你的function要执行和计算1万次。但是，使用MapPartitions操作之后，**一个task仅仅会执行一次function，function一次接收所有的partition数据。只要执行一次就可以了，性能比较高。**
+
+* **MapPartitions的缺点**：
+
+如果是普通的map操作，一次function的执行就处理一条数据；那么如果内存不够用的情况下，比如处理了1千条数据了，那么这个时候内存不够了，那么就可以将已经处理完的1千条数据从内存里面垃圾回收掉，或者用其他方法，腾出空间来吧。所以说普通的map操作通常不会导致内存的OOM异常。
+
+**但是MapPartitions操作，对于大量数据来说，比如甚至一个partition，100万数据，一次传入一个function以后，那么可能一下子内存不够，但是又没有办法去腾出内存空间来，可能就OOM，内存溢出。**
+
+
+
 
 
 

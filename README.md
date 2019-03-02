@@ -550,13 +550,13 @@ shuffle操作，会导致大量的磁盘读写，严重降低性能
 
 **session随机抽取：**按每天的每个小时的session数量，占当天session总数的比例，乘以每天要抽取的session数量，计算出每个小时要抽取的session数量；然后呢，在每天每小时的session中，随机抽取出之前计算出来的数量的session。
 
-举例：10000个session，100个session；0点~1点之间，有2000个session，占总session的比例就是0.2；按照比例，0点~1点需要抽取出来的session数量是100 * 0.2 = 20个；在0点~点的2000个session中，随机抽取出来20个session。
+举例：10000个session，100个session；0点-1点之间，有2000个session，占总session的比例就是0.2；按照比例，0点-1点需要抽取出来的session数量是100 * 0.2 = 20个；在0点-点的2000个session中，随机抽取出来20个session。
 
 我们之前有什么数据：session粒度的聚合数据（计算出来session的start_time）
 
 session聚合数据进行映射，将每个session发生的yyyy-MM-dd_HH（start_time）作为key，value就是session_id对上述数据，使用countByKey算子，就可以获取到每天每小时的session数量
 
-（按时间比例随机抽取算法）每天每小时有多少session，根据这个数量计算出每天每小时的session占比，以及按照占比，需要抽取多少session，可以计算出每个小时内，从0~session数量之间的范围中，获取指定抽取数量个随机数，作为随机抽取的索引
+（按时间比例随机抽取算法）每天每小时有多少session，根据这个数量计算出每天每小时的session占比，以及按照占比，需要抽取多少session，可以计算出每个小时内，从0-session数量之间的范围中，获取指定抽取数量个随机数，作为随机抽取的索引
 
 把之前转换后的session数据（以yyyy-MM-dd_HH作为key），执行groupByKey算子；然后可以遍历每天每小时的session，遍历时，遇到之前计算出来的要抽取的索引，即将session抽取出来；抽取出来的session，直接写入MySQL数据库
 
@@ -660,7 +660,7 @@ sortByKey算子，默认情况下，它支持根据int、long等类型来进行�
 
 比如有3个executor，每个executor有2个cpu core，那么同时能够并行执行的task，就是6个。6个执行完以后，再换下一批6个task。增加了executor数量以后，那么，就意味着，能够并行执行的task数量，也就变多了。比如原先是6个，现在可能可以并行执行10个，甚至20个，100个。那么并行能力就比之前提升了数倍，数十倍。
 
-相应的，性能（执行的速度），也能提升数倍~数十倍。
+相应的，性能（执行的速度），也能提升数倍-数十倍。
 
 **增加每个executor的cpu core**，也是增加了执行的并行能力。原本20个executor，每个才2个cpu core。能够并行执行的task数量，就是40个task。
 
@@ -696,7 +696,7 @@ task没有设置，或者设置的很少，比如就设置了，100个task。50�
 
 * 1、**task数量，至少设置成与Spark application的总cpu core数量相同（最理想情况，比如总共150个cpu core，分配了150个task，一起运行，差不多同一时间运行完毕）**
 
-* 2、官方是推荐，**task数量，设置成spark application总cpu core数量的2~3倍，比如150个cpu core，基本要设置task数量为300~500**；实际情况，与理想情况不同的，有些task会运行的快一点，比如50s就完了，有些task，可能会慢一点，要1分半才运行完，所以如果你的task数量，刚好设置的跟cpu core数量相同，可能还是会导致资源的浪费，因为，比如150个task，10个先运行完了，剩余140个还在运行，但是这个时候，有10个cpu core就空闲出来了，就导致了浪费。**那如果task数量设置成cpu core总数的2~3倍，那么一个task运行完了以后，另一个task马上可以补上来，就尽量让cpu core不要空闲，同时也是尽量提升spark作业运行的效率和速度，提升性能。**
+* 2、官方是推荐，**task数量，设置成spark application总cpu core数量的2-3倍，比如150个cpu core，基本要设置task数量为300-500**；实际情况，与理想情况不同的，有些task会运行的快一点，比如50s就完了，有些task，可能会慢一点，要1分半才运行完，所以如果你的task数量，刚好设置的跟cpu core数量相同，可能还是会导致资源的浪费，因为，比如150个task，10个先运行完了，剩余140个还在运行，但是这个时候，有10个cpu core就空闲出来了，就导致了浪费。**那如果task数量设置成cpu core总数的2-3倍，那么一个task运行完了以后，另一个task马上可以补上来，就尽量让cpu core不要空闲，同时也是尽量提升spark作业运行的效率和速度，提升性能。**
 
 * 3、如何设置一个Spark Application的并行度？
 
@@ -734,7 +734,7 @@ task没有设置，或者设置的很少，比如就设置了，100个task。50�
 
 ### 在实际项目中广播大变量
 
-如果说，task使用大变量（1m~100m），明知道会导致性能出现恶劣的影响。那么我们怎么来解决呢？广播，Broadcast，将大变量广播出去。而不是直接使用。
+如果说，task使用大变量（1m-100m），明知道会导致性能出现恶劣的影响。那么我们怎么来解决呢？广播，Broadcast，将大变量广播出去。而不是直接使用。
 
 刚才说的这种随机抽取的map，1M，举例。还算小的。如果你是从哪个表里面读取了一些维度数据，比方说，所有商品品类的信息，在某个算子函数中要使用到。100M。
 
@@ -776,13 +776,13 @@ executor的BlockManager除了从driver上拉取，也可能从其他节点的Blo
 
 如果使用了广播变量。50个execurtor，50个副本。500M的数据，网络传输，而且不一定都是从Driver传输到每个节点，还可能是就近从最近的节点的executor的bockmanager上拉取变量副本，网络传输速度大大增加；500M的内存消耗。
 
-10000M，500M，20倍。20倍~以上的网络传输性能消耗的降低；20倍的内存消耗的减少。
+10000M，500M，20倍。20倍-以上的网络传输性能消耗的降低；20倍的内存消耗的减少。
 
 对性能的提升和影响，还是很客观的。
 
 虽然说，不一定会对性能产生决定性的作用。比如运行30分钟的spark作业，可能做了广播变量以后，速度快了2分钟，或者5分钟。但是一点一滴的调优，积少成多。最后还是会有效果的。
 
-没有经过任何调优手段的spark作业，16个小时；三板斧下来，就可以到5个小时；然后非常重要的一个调优，影响特别大，shuffle调优，2~3个小时；应用了10个以上的性能调优的技术点，JVM+广播，30分钟。16小时~30分钟。
+没有经过任何调优手段的spark作业，16个小时；三板斧下来，就可以到5个小时；然后非常重要的一个调优，影响特别大，shuffle调优，2-3个小时；应用了10个以上的性能调优的技术点，JVM+广播，30分钟。16小时-30分钟。
 
 ### 在实际项目中使用Kryo序列化
 
@@ -935,7 +935,7 @@ Spark在Driver上，对Application的每一个stage的task，进行分配之前�
 
 3、shuffle调优（相当重要）：spark在执行groupByKey、reduceByKey等操作时的，shuffle环节的调优。这个很重要。shuffle调优，其实对spark作业的性能的影响，是相当之高！！！
 
-**经验：在spark作业的运行过程中，只要一牵扯到有shuffle的操作，基本上shuffle操作的性能消耗，要占到整个spark作业的50%~90%。10%用来运行map等操作，90%耗费在两个shuffle操作。groupByKey、countByKey。**
+**经验：在spark作业的运行过程中，只要一牵扯到有shuffle的操作，基本上shuffle操作的性能消耗，要占到整个spark作业的50%-90%。10%用来运行map等操作，90%耗费在两个shuffle操作。groupByKey、countByKey。**
 
 4、spark操作调优（spark算子调优，比较重要）：groupByKey，countByKey或aggregateByKey来重构实现。有些算子的性能，是比其他一些算子的性能要高的。foreachPartition替代foreach。如果一旦遇到合适的情况，效果还是不错的。
 
@@ -997,7 +997,7 @@ executor堆外
 
 上述情况下，就可以去考虑调节一下executor的堆外内存。也许就可以避免报错；此外，有时，堆外内存调节的比较大的时候，对于性能来说，也会带来一定的提升。
 
-![1551514531252](/tmp/1551514531252.png)
+![1551514531252.png](https://i.loli.net/2019/03/02/5c7a61711a8fa.png)
 
 如果此时，stage0的executor挂了，block manager也没有了；此时，stage1的executor的task，虽然通过Driver的MapOutputTrakcer获取到了自己数据的地址；但是实际上去找对方的block manager获取数据的时候，是获取不到的
 
@@ -1072,14 +1072,20 @@ reduceByKey(_+_)
 reduceByKey(_+_)，在某个action触发job的时候，DAGScheduler，会负责划分job为多个stage。划分的依据，就是，**如果发现有会触发shuffle操作的算子，比如reduceByKey，就将这个操作的前半部分，以及之前所有的RDD和transformation操作，划分为一个stage；shuffle操作的后半部分，以及后面的，直到action为止的RDD和transformation操作，划分为另外一个stage。**
 
 * 每一个shuffle的前半部分stage的task，每个task都会创建下一个stage的task数量相同的文件，比如下一个stage会有100个task，那么当前stage每个task都会创建100份文件；会将同一个key对应的values，一定是写入同一个文件中的；不同节点上的task，也一定会将同一个key对应的values，写入下一个stage，同一个task对应的文件中。
+
 * shuffle的后半部分stage的task，每个task都会从各个节点上的task写的属于自己的那一份文件中，拉取key, value对；然后task会有一个内存缓冲区，然后会用HashMap，进行key, values的汇聚；(key ,values)；task会用我们自己定义的聚合函数，比如reduceByKey(_+_)，把所有values进行一对一的累加；聚合出来最终的值。就完成了shuffle。
+
 * shuffle前半部分的task在写入数据到磁盘文件之前，都会先写入一个一个的内存缓冲，内存缓冲满溢之后，再spill溢写到磁盘文件中。
 
-![1551515332028](/tmp/1551515332028.png)
+  
+
+![1551515332028.png](https://i.loli.net/2019/03/02/5c7a61ae358ee.png)
 
 ### 合并map端输出文件
 
-![1551516763613](/tmp/1551516763613.png)
+
+
+![1551516763613.png](https://i.loli.net/2019/03/02/5c7a61f045ead.png)
 
 * 问题来了：默认的这种shuffle行为，对性能有什么样的恶劣影响呢？
 
@@ -1147,7 +1153,7 @@ new SparkConf().set("spark.shuffle.consolidateFiles", "true")
 
   2、第二个stage，原本要拉取第一个stage的task数量份文件，1000个task，第二个stage的每个task，都要拉取1000份文件，走网络传输；合并以后，100个节点，每个节点2个cpu core，第二个stage的每个task，主要拉取100 * 2 = 200个文件即可；网络传输的性能消耗是不是也大大减少
 
-  分享一下，实际在生产环境中，使用了spark.shuffle.consolidateFiles机制以后，实际的性能调优的效果：对于上述的这种生产环境的配置，性能的提升，还是相当的客观的。spark作业，5个小时 -> 2~3个小时。
+  分享一下，实际在生产环境中，使用了spark.shuffle.consolidateFiles机制以后，实际的性能调优的效果：对于上述的这种生产环境的配置，性能的提升，还是相当的客观的。spark作业，5个小时 -> 2-3个小时。
 
   大家不要小看这个map端输出文件合并机制。实际上，在数据量比较大，你自己本身做了前面的性能调优，executor上去->cpu core上去->并行度（task数量）上去，shuffle没调优，shuffle就很糟糕了；大量的map端输出文件的产生。对性能有比较恶劣的影响。
 
@@ -1164,9 +1170,9 @@ map端内存缓冲，reduce端内存占比；很多资料、网上视频，都�
 
 **以实际的生产经验来说，这两个参数没有那么重要，往往来说，shuffle的性能不是因为这方面的原因导致的**
 
-但是，有一点点效果的，broadcast，数据本地化等待时长；这两个shuffle调优的小点，其实也是需要跟其他的大量的小点配合起来使用，一点一点的提升性能，最终很多个性能调优的小点的效果，汇集在一起之后，那么就会有可以看见的还算不错的性能调优的效果。
+但是，有一点点效果的，broadcast，数据本地化等待时长；这两个shuffle调优的小点，其实也是需要跟其他的大量的小点配合起来使用，一点一点的提升性能，最终很多个性能调优的小点的效果，汇集在一起之后，那么就会有可以看见的还算不错的性能调优的效果。	
 
-![1551517619245](/tmp/1551517619245.png)
+![1551517619245.png](https://i.loli.net/2019/03/02/5c7a621c8df92.png)
 
 默认情况下，shuffle的map task，输出到磁盘文件的时候，统一都会先写入每个task自己关联的一个内存缓冲区。
 

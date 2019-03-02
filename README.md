@@ -1501,7 +1501,7 @@ spark.reducer.maxSizeInFlight，24
 
 最多可以忍受1个小时没有拉取到shuffle file。只是去设置一个最大的可能的值。full gc不可能1个小时都没结束吧。这样呢，就可以尽量避免因为gc导致的shuffle file not found，无法拉取到的问题。
 
-#### 解决YARN队列资源不足导致的application直接失败
+### 解决YARN队列资源不足导致的application直接失败
 
 * 现象：
 
@@ -1549,6 +1549,157 @@ spark.reducer.maxSizeInFlight，24
 3、你的队列里面，无论何时，只会有一个作业在里面运行。那么此时，**就应该用我们之前讲过的性能调优的手段，去将每个队列能承载的最大的资源，分配给你的每一个spark作业，比如80个executor；6G的内存；3个cpu core。尽量让你的spark作业每一次运行，都达到最满的资源使用率，最快的速度，最好的性能；并行度，240个cpu core，720个task。**
 
 4、在J2EE中，通过线程池的方式（一个线程池对应一个资源队列），来实现上述我们说的方案。
+
+### 解决各种序列化导致的报错
+
+* 你会看到什么样的序列化导致的报错？
+
+  用client模式去提交spark作业，观察本地打印出来的log。如果出现了类似于Serializable、Serialize等等字眼，报错的log，那么恭喜大家，就碰到了序列化问题导致的报错。
+
+  虽然是报错，但是序列化报错，应该是属于比较简单的了，很好处理。
+
+* 序列化报错要注意的三个点：
+
+  **1、你的算子函数里面，如果使用到了外部的自定义类型的变量，那么此时，就要求你的自定义类型，必须是可序列化的。**
+
+```JAVA
+final Teacher teacher = new Teacher("leo");
+
+studentsRDD.foreach(new VoidFunction() {
+ 
+public void call(Row row) throws Exception {
+  String teacherName = teacher.getName();
+  ....  
+}
+});
+
+public class Teacher implements Serializable {
+  
+}
+```
+
+**2、如果要将自定义的类型，作为RDD的元素类型，那么自定义的类型也必须是可以序列化的**
+
+```JAVA
+JavaPairRDD<Integer, Teacher> teacherRDD
+JavaPairRDD<Integer, Student> studentRDD
+studentRDD.join(teacherRDD)
+
+public class Teacher implements Serializable {
+  
+}
+
+public class Student implements Serializable {
+  
+}
+```
+
+**3、不能在上述两种情况下，去使用一些第三方的，不支持序列化的类型**
+
+```JAVA
+Connection conn = 
+
+studentsRDD.foreach(new VoidFunction() {
+ 
+public void call(Row row) throws Exception {
+  conn.....
+}
+
+});
+```
+
+Connection是不支持序列化的
+
+### 解决算子函数返回NULL导致的问题
+
+在算子函数中，返回null
+
+```JAVA
+return actionRDD.mapToPair(new PairFunction<Row, String, Row>() {
+
+			private static final long serialVersionUID = 1L;
+			
+			@Override
+			public Tuple2<String, Row> call(Row row) throws Exception {
+				return new Tuple2<String, Row>("-999", RowFactory.createRow("-999"));  
+			}
+			
+		});
+```
+
+大家可以看到，在有些算子函数里面，是需要我们有一个返回值的。但是，有时候，我们可能对某些值，就是不想有什么返回值。**我们如果直接返回NULL的话，那么可以不幸的告诉大家，是不行的，会报错的。**
+
+Scala.Math(NULL)，异常
+
+* 如果碰到你的确是对于某些值，不想要有返回值的话，有一个解决的办法：
+
+1、在返回的时候，返回一些特殊的值，不要返回null，比如“-999”
+
+2、在通过算子获取到了一个RDD之后，可以对这个RDD执行filter操作，进行数据过滤。filter内，可以对数据进行判定，如果是-999，那么就返回false，给过滤掉就可以了。
+
+3、大家不要忘了，**之前咱们讲过的那个算子调优里面的coalesce算子，在filter之后，可以使用coalesce算子压缩一下RDD的partition的数量，让各个partition的数据比较紧凑一些。也能提升一些性能。**
+
+### 解决yarn-client模式导致的网卡流量激增问题
+
+![深度截图_选择区域_20190302213706.png](https://i.loli.net/2019/03/02/5c7a8bfd71297.png)
+
+
+
+* Driver到底是什么？
+
+我们写的spark程序，打成jar包，用spark-submit来提交。jar包中的一个main类，通过jvm的命令启动起来。JVM进程，这个进程，其实就是咱们的Driver进程。
+
+**Driver进程启动起来以后，执行我们自己写的main函数，从new SparkContext()。。。**
+
+* Application-Master？
+
+  yarn中的核心概念，任何要在yarn上启动的作业类型（mr、spark），都必须有一个。
+
+**每种计算框架（mr、spark），如果想要在yarn上执行自己的计算应用，那么就必须自己实现和提供一个ApplicationMaster**
+
+**相当于是实现了yarn提供的接口，spark自己开发的一个类**
+
+spark在yarn-client模式下，application的注册（executor的申请）和计算task的调度，是分离开来的。
+
+standalone模式下，这两个操作都是driver负责的。
+
+ApplicationMaster(ExecutorLauncher)负责executor的申请；
+
+driver负责job和stage的划分，以及task的创建、分配和调度。
+
+**最后，driver接收到属于自己的executor进程的注册之后，就可以去进行我们写的spark作业代码的执行了。**
+
+**会一行一行的去执行咱们写的那些spark代码；执行到某个action操作的时候，就会触发一个job，然后DAGScheduler会将job划分为一个一个的stage，为每个stage都创建指定数量的task；**
+
+**TaskScheduler将每个stage的task，分配到各个executor上面去执行。task，就会执行咱们写的算子函数。**
+
+* yarn-client模式下，会产生什么样的问题呢？
+
+由于咱们的driver是启动在本地机器的，而且driver是全权负责所有的任务的调度的，也就是说要跟yarn集群上运行的多个executor进行频繁的通信（中间有task的启动消息、task的执行统计消息、task的运行状态、shuffle的输出结果）。
+
+咱们来想象一下。比如你的executor有100个，stage有10个，task有1000个。每个stage运行的时候，都有1000个task提交到executor上面去运行，平均每个executor有10个task。接下来问题来了，driver要频繁地跟executor上运行的1000个task进行通信。通信消息特别多，通信的频率特别高。运行完一个stage，接着运行下一个stage，又是频繁的通信。
+
+在整个spark运行的生命周期内，都会频繁的去进行通信和调度。所有这一切通信和调度都是从你的本地机器上发出去的，和接收到的。这是最要人命的地方。**你的本地机器，很可能在30分钟内（spark作业运行的周期内），进行频繁大量的网络通信。那么此时，你的本地机器的网络通信负载是非常非常高的。会导致你的本地机器的网卡流量会激增！！！**
+
+你的本地机器的网卡流量激增，当然不是一件好事了。因为在一些大的公司里面，对每台机器的使用情况，都是有监控的。不会允许单个机器出现耗费大量网络带宽等等这种资源的情况。运维人员。可能对公司的网络，或者其他（你的机器还是一台虚拟机），对其他机器，都会有负面和恶劣的影响。
+
+* 解决的方法：
+
+实际上解决的方法很简单，就是心里要清楚，yarn-client模式是什么情况下，可以使用的？
+
+**yarn-client模式，通常咱们就只会使用在测试环境中**，你写好了某个spark作业，打了一个jar包，在某台测试机器上，用yarn-client模式去提交一下。因为测试的行为是偶尔为之的，不会长时间连续提交大量的spark作业去测试。还有一点好处，yarn-client模式提交，可以在本地机器观察到详细全面的log。通过查看log，可以去解决线上报错的故障（troubleshooting）、对性能进行观察并进行性能调优。
+
+**实际上线了以后，在生产环境中，都得用yarn-cluster模式，去提交你的spark作业**
+
+yarn-cluster模式，就跟你的本地机器引起的网卡流量激增的问题，就没有关系了。也就是说，就算有问题，也应该是yarn运维团队和基础运维团队之间的事情了。使用了yarn-cluster模式以后，就不是你的本地机器运行Driver，进行task调度了。是yarn集群中，某个节点会运行driver进程，负责task调度。
+
+
+
+
+
+
+
+
 
 
 
@@ -1687,3 +1838,4 @@ kafka-console-consumer.sh --zookeeper localhost:2181 --topic AdRealTimeLog
 
 * row.getAsLong()
 * action操作先执行
+* 返回值NULL异常

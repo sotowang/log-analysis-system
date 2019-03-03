@@ -2084,69 +2084,104 @@ log一般会报是在你的哪一行代码，导致了OOM异常；或者呢，�
 
 6、Spark SQL的数据倾斜解决方案？双重group by、随机key以及扩容表（自定义UDF函数，random_key()）、内置reduce join转换为map join、shuffle并行度
 
+* 技术方案设计：
 
+1、**查询task，获取日期范围**，通过Spark SQL，查询user_visit_action表中的指定日期范围内的数据，过滤出，商品点击行为，click_product_id is not null；click_product_id != 'NULL'；click_product_id != 'null'；city_id，click_product_id
 
+2、使用Spark SQL从MySQL中查询出来城市信息（city_id、city_name、area），用户访问行为数据要跟城市信息进行join，city_id、city_name、area、product_id，RDD，转换成DataFrame，注册成一个临时表
 
+3、Spark SQL内置函数（case when），对area打标记（华东大区，A级，华中大区，B级，东北大区，C级，西北大区，D级），area_level
 
+4、计算出来每个区域下每个商品的点击次数，group by area, product_id；保留每个区域的城市名称列表；**自定义UDAF，group_concat_distinct()函数，聚合出来一个city_names字段，area、product_id、city_names、click_count**
 
+5、join商品明细表，hive（product_id、product_name、extend_info），extend_info是json类型，自定义UDF，get_json_object()函数，取出其中的product_status字段，if()函数（Spark SQL内置函数），判断，0 自营，1 第三方；（area、product_id、city_names、click_count、product_name、product_status）
 
+6、**开窗函数，根据area来聚合，获取每个area下，click_count排名前3的product信息**；area、area_level、product_id、city_names、click_count、product_name、product_status
 
+7、结果写入MySQL表中
 
+8、Spark SQL的数据倾斜解决方案？双重group by、随机key以及扩容表（自定义UDF函数，random_key()）、Spark SQL内置的reduce join转换为map join、提高shuffle并行度9、本地测试和生产环境的测试
 
+* 基础数据的准备和设计
 
-
-
-
-
-## 技术点和知识点
-
-* 大数据项目的架构（公共组件的封装，包的划分，代码的规范）
-
-* 复杂的分析需求（纯spark作业代码）
-
-* Spark Core 算子的综合应用：map reduce count group
-
-* 算定义Accumulator，按时间比例随机抽取算法，二次排序，分组取TopN算法
-
-* 大数据项目开发流程：数据调研 需求分析 技术方案设计 数据库设计 编码实现 单元测试 本地测试
-
-##  性能调优
-
-### 常规调优
-
-* 性能调优
-
-executor, cpu per executor, memory per executor, driver memory
-
-```bash
-spark-submit \
---class com.soto.....  \
---num-executors 3 \  
---driver-memory 100m \
---executor-memory 1024m \
---executor-cores 3 \
-/usr/local/......jar  \
+```
+1、MySQL表中，要有city_info，city_id、city_name、area
+2、Hive表中，要有一个product_info表，product_id、product_name、extend_info
+3、MySQL中，设计结果表，task_id、area、area_level、product_id、city_names、click_count、product_name、product_status
 ```
 
-* Kryo 序列化
+### 开发自定义UDAF聚合函数之 group_concat_distinct()
 
-```html
-1. 算子函数中用到了外部变量，会序列化，会使用Kyro
-2. 使用了序列化的持久化级别时，在将每个RDD partition序列化成一个在的字节数组时，就会使用Kryo进一步优化序列化的效率和性能
-3. stage中task之间 执行shuffle时，文件通过网络传输，会使用序列化
+```java
+// 注册自定义函数
+		sqlContext.udf().register("concat_long_string", 
+				new ConcatLongStringUDF(), DataTypes.StringType);
+		sqlContext.udf().register("group_concat_distinct", 
+				new GroupConcatDistinctUDAF());
 ```
 
-###  JVM调优
+```java
+public class GroupConcatDistinctUDAF extends UserDefinedAggregateFunction {
+}
+```
+
+### 使用开窗函数统计各区域的top3热门商品
+
+ 技术点：开窗函数
+
+	使用开窗函数先进行一个子查询
+	按照area进行分组，给每个分组内的数据，按照点击次数降序排序，打上一个组内的行号
+	接着在外层查询中，过滤出各个组内的行号排名前3的数据
+	其实就是咱们的各个区域下top3热门商品
+```java
+String sql = 
+				"SELECT "
+					+ "area,"
+					+ "product_id,"
+					+ "click_count,"
+					+ "city_infos,"
+					+ "product_name,"
+					+ "product_status "
+				+ "FROM ("
+					+ "SELECT "
+						+ "area,"
+						+ "product_id,"
+						+ "click_count,"
+						+ "city_infos,"
+						+ "product_name,"
+						+ "product_status,"
+						+ "ROW_NUMBER() OVER(PARTITION BY area ORDER BY click_count DESC) rank "
+					+ "FROM tmp_area_fullprod_click_count "
+				+ ") t "
+				+ "WHERE rank<=3";
+		
+		DataFrame df = sqlContext.sql(sql);
+```
+
+## 广告点击流量实时统计
+
+### 计算最近1小时滑动窗口内的广告点击趋势
+
+```java
+JavaPairDStream<String, Long> aggrRDD = pairDStream.reduceByKeyAndWindow(
+				
+				new Function2<Long, Long, Long>() {
+
+					private static final long serialVersionUID = 1L;
+		
+					@Override
+					public Long call(Long v1, Long v2) throws Exception {
+						return v1 + v2;
+					}
+					
+				}, Durations.minutes(60), Durations.seconds(10));
+```
 
 
-### shuffle调优
 
-### spark算子调优
 
-* 数据倾斜解决
-* troubleshotting
 
-## 8. 生产环境测试
+## 生产环境测试
 * Hive表测试
 
 ```bash

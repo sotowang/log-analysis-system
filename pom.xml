@@ -24,7 +24,7 @@
     <maven.compiler.source>1.7</maven.compiler.source>
     <maven.compiler.target>1.7</maven.compiler.target>
     <!--<spark_version>2.1.1</spark_version>-->
-    <spark_version>1.6.0-cdh5.7.0</spark_version>
+    <spark_version>99.9.9</spark_version>
   </properties>
 
   <dependencies>
